@@ -1,0 +1,6 @@
+[theme]
+primaryColor = "#2E8B57"                # Verde marinho (tom médio de verde)
+backgroundColor = "#1c3329"             # Verde muito escuro (quase preto)
+secondaryBackgroundColor = "#2d4a3e"    # Verde escuro para widgets
+textColor = "#ffffff"                   # Branco puro para melhor contraste
+font = "monospace"
