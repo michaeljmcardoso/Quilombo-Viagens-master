@@ -753,9 +753,9 @@ if 'editando_viagem' not in st.session_state:
 # ==================== FIM INICIALIZAÇÃO ====================
 
 # Título
-st.title("🛻 QuilomboViagens")
-st.subheader("Sistema de Cadastramento e Orçamento de Viagens")
-st.markdown("**Divisão Quilombola - Plano de Ações**")
+st.subheader("🛻 QuilomboViagens")
+st.markdown("Sistema de Cadastro e Orçamento de Viagens")
+#st.markdown("**Divisão Quilombola - Plano de Ações**")
 
 # Sidebar
 with st.sidebar:
