@@ -32,7 +32,7 @@ st.set_page_config(
 # Valores fixos
 DIARIA_VALOR = 335.00
 DIESEL_VALOR = 6.95
-CONSUMO_MEDIO = 10.0
+CONSUMO_MEDIO = 8.5
 MEIA_DIARIA = DIARIA_VALOR / 2
 
 # Configurações de email
