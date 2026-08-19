@@ -125,7 +125,7 @@ celerybeat.pid
 #.env
 .venv
 #env/
-.sistema-controle-de-processos/
+.quilomboviagens/
 venv/
 ENV/
 #env.bak/
