@@ -125,7 +125,7 @@ celerybeat.pid
 #.env
 .venv
 #env/
-.quilomboviagens/
+quilomboviagens/
 venv/
 ENV/
 #env.bak/
