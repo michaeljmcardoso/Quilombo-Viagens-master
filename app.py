@@ -62,6 +62,205 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Criar tabela de viagens
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS viagens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                comunidade TEXT NOT NULL,
+                municipio TEXT NOT NULL,
+                data_inicio TEXT NOT NULL,
+                data_fim TEXT NOT NULL,
+                quantidade_servidores INTEGER NOT NULL,
+                diarias_por_servidor REAL NOT NULL,
+                dias_totais INTEGER NOT NULL,
+                distancia_rodoviaria REAL NOT NULL,
+                distancia_local REAL NOT NULL,
+                distancia_total REAL NOT NULL,
+                tipo_atividade TEXT NOT NULL,
+                cadastrante TEXT NOT NULL,
+                email_usuario TEXT,
+                data_cadastro TEXT NOT NULL,
+                orcamento_diarias_valor REAL NOT NULL,
+                orcamento_combustivel REAL NOT NULL,
+                orcamento_total_geral REAL NOT NULL,
+                orcamento_diarias_servidor REAL NOT NULL,
+                orcamento_litros_rodoviario REAL NOT NULL,
+                orcamento_litros_local REAL NOT NULL,
+                orcamento_total_litros REAL NOT NULL,
+                orcamento_combustivel_rodoviario REAL NOT NULL,
+                orcamento_combustivel_local REAL NOT NULL
+            )
+        ''')
+        
+        # Criar tabela de feedback (ANÔNIMO)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS feedback (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data_resposta TEXT NOT NULL,
+                facilidade_uso TEXT,
+                layout_intuitivo TEXT,
+                encontrar_funcionalidades TEXT,
+                funcionalidades_usa TEXT,
+                funcionalidade_importante TEXT,
+                funcionalidade_falta TEXT,
+                velocidade_sistema TEXT,
+                atende_necessidades TEXT,
+                tempo_cadastro TEXT,
+                qualidade_extratos TEXT,
+                relatorios_claros TEXT,
+                info_relatorios TEXT,
+                recebe_email TEXT,
+                email_claro TEXT,
+                email_melhorias TEXT,
+                importancia_banco TEXT,
+                confianca_dados TEXT,
+                nota_geral TEXT,
+                recomendaria TEXT,
+                sugestoes_melhoria TEXT,
+                mais_gosta TEXT,
+                menos_gosta TEXT,
+                continuaria_usando TEXT,
+                expansao_futuro TEXT,
+                comentarios_adicionais TEXT,
+                data_cadastro TEXT
+            )
+        ''')
+        
+        conn.commit()
+        conn.close()
+    
+    def migrar_tabela(self):
+        """Migra a tabela para a versão mais recente se necessário"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        # Verificar colunas existentes na tabela viagens
+        cursor.execute("PRAGMA table_info(viagens)")
+        colunas_viagens = [col[1] for col in cursor.fetchall()]
+        
+        # Adicionar colunas faltantes na tabela viagens
+        if 'orcamento_combustivel_local' not in colunas_viagens:
+            cursor.execute('ALTER TABLE viagens ADD COLUMN orcamento_combustivel_local REAL DEFAULT 0.0')
+            print("✅ Coluna orcamento_combustivel_local adicionada na tabela viagens")
+        
+        conn.commit()
+        conn.close()
+    
+    def salvar_feedback(self, feedback_data):
+        """Salva um feedback anônimo no banco de dados"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            INSERT INTO feedback (
+                data_resposta,
+                facilidade_uso, layout_intuitivo, encontrar_funcionalidades,
+                funcionalidades_usa, funcionalidade_importante, funcionalidade_falta,
+                velocidade_sistema, atende_necessidades, tempo_cadastro,
+                qualidade_extratos, relatorios_claros, info_relatorios,
+                recebe_email, email_claro, email_melhorias,
+                importancia_banco, confianca_dados,
+                nota_geral, recomendaria,
+                sugestoes_melhoria, mais_gosta, menos_gosta,
+                continuaria_usando, expansao_futuro, comentarios_adicionais,
+                data_cadastro
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            feedback_data['data_resposta'],
+            feedback_data['facilidade_uso'],
+            feedback_data['layout_intuitivo'],
+            feedback_data['encontrar_funcionalidades'],
+            feedback_data['funcionalidades_usa'],
+            feedback_data['funcionalidade_importante'],
+            feedback_data['funcionalidade_falta'],
+            feedback_data['velocidade_sistema'],
+            feedback_data['atende_necessidades'],
+            feedback_data['tempo_cadastro'],
+            feedback_data['qualidade_extratos'],
+            feedback_data['relatorios_claros'],
+            feedback_data['info_relatorios'],
+            feedback_data['recebe_email'],
+            feedback_data['email_claro'],
+            feedback_data['email_melhorias'],
+            feedback_data['importancia_banco'],
+            feedback_data['confianca_dados'],
+            feedback_data['nota_geral'],
+            feedback_data['recomendaria'],
+            feedback_data['sugestoes_melhoria'],
+            feedback_data['mais_gosta'],
+            feedback_data['menos_gosta'],
+            feedback_data['continuaria_usando'],
+            feedback_data['expansao_futuro'],
+            feedback_data['comentarios_adicionais'],
+            feedback_data['data_cadastro']
+        ))
+        
+        feedback_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return feedback_id
+    
+    def carregar_feedbacks(self):
+        """Carrega todos os feedbacks do banco de dados"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute('SELECT * FROM feedback ORDER BY id DESC')
+        rows = cursor.fetchall()
+        conn.close()
+        
+        feedbacks = []
+        for row in rows:
+            feedback = {
+                'id': row[0],
+                'data_resposta': row[1],
+                'facilidade_uso': row[2],
+                'layout_intuitivo': row[3],
+                'encontrar_funcionalidades': row[4],
+                'funcionalidades_usa': row[5],
+                'funcionalidade_importante': row[6],
+                'funcionalidade_falta': row[7],
+                'velocidade_sistema': row[8],
+                'atende_necessidades': row[9],
+                'tempo_cadastro': row[10],
+                'qualidade_extratos': row[11],
+                'relatorios_claros': row[12],
+                'info_relatorios': row[13],
+                'recebe_email': row[14],
+                'email_claro': row[15],
+                'email_melhorias': row[16],
+                'importancia_banco': row[17],
+                'confianca_dados': row[18],
+                'nota_geral': row[19],
+                'recomendaria': row[20],
+                'sugestoes_melhoria': row[21],
+                'mais_gosta': row[22],
+                'menos_gosta': row[23],
+                'continuaria_usando': row[24],
+                'expansao_futuro': row[25],
+                'comentarios_adicionais': row[26],
+                'data_cadastro': row[27]
+            }
+            feedbacks.append(feedback)
+        
+        return feedbacks
+    """Classe para gerenciar o banco de dados SQLite"""
+    
+    def __init__(self, db_file="viagens.db"):
+        self.db_file = db_file
+        self.init_db()
+        self.migrar_tabela()
+    
+    def get_connection(self):
+        """Retorna uma conexão com o banco de dados"""
+        return sqlite3.connect(self.db_file)
+    
+    def init_db(self):
+        """Inicializa o banco de dados com as tabelas necessárias"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
         # Criar tabela de viagens com TODAS as colunas necessárias
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS viagens (
@@ -779,7 +978,7 @@ with st.sidebar:
         st.caption(f"💾 Dados salvos no banco SQLite")
 
 # Abas
-tab1, tab2, tab3, tab4 = st.tabs(["📝 Nova Viagem", "📋 Lista de Viagens", "📊 Análise e Relatórios", "📄 Meus Extratos"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Nova Viagem", "📋 Lista de Viagens", "📊 Análise e Relatórios", "📄 Meus Extratos", "📝 Feedback"])
 
 with tab1:
     st.markdown("### 📝 Cadastrar Nova Viagem")
@@ -1516,3 +1715,356 @@ with tab4:
                     b64_html = base64.b64encode(html_bytes).decode()
                     href_html = f'<a href="data:text/html;base64,{b64_html}" download="extrato_{viagem.get("comunidade", "")}_{datetime.now().strftime("%Y%m%d_%H%M")}.html">📧 Baixar Extrato em HTML</a>'
                     st.markdown(href_html, unsafe_allow_html=True)
+
+with tab5:
+    st.markdown("### 📝 Formulário de Feedback")
+    st.markdown("Sua opinião é muito importante para melhorarmos o sistema!")
+    st.markdown("**🔒 Este formulário é totalmente anônimo.**")
+    st.markdown("---")
+    
+    # Inicializar estado do feedback
+    if 'feedback_enviado' not in st.session_state:
+        st.session_state.feedback_enviado = False
+    
+    if not st.session_state.feedback_enviado:
+        # Seção 1: Usabilidade
+        with st.expander("🎯 Facilidade de Uso", expanded=True):
+            st.markdown("**1.1** Como você avalia a facilidade de uso do sistema?")
+            facilidade_uso = st.radio(
+                "Facilidade de uso",
+                ["Muito Fácil", "Fácil", "Neutro", "Difícil", "Muito Difícil"],
+                index=1,
+                key="fb_facilidade",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**1.2** O layout e a organização das informações são intuitivos?")
+            layout_intuitivo = st.radio(
+                "Layout intuitivo",
+                ["Sim, totalmente", "Sim, em grande parte", "Mais ou menos", "Não, pouco intuitivo", "Não, nada intuitivo"],
+                index=1,
+                key="fb_layout",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**1.3** Você conseguiu encontrar facilmente as funcionalidades que precisava?")
+            encontrar_funcionalidades = st.radio(
+                "Encontrar funcionalidades",
+                ["Sempre", "Na maioria das vezes", "Às vezes", "Raramente", "Nunca"],
+                index=1,
+                key="fb_encontrar",
+                label_visibility="collapsed"
+            )
+        
+        # Seção 2: Funcionalidades
+        with st.expander("⚙️ Funcionalidades"):
+            st.markdown("**2.1** Quais funcionalidades você mais utiliza no sistema?")
+            funcionalidades_usa = st.multiselect(
+                "Funcionalidades utilizadas",
+                [
+                    "Cadastrar nova viagem",
+                    "Visualizar lista de viagens",
+                    "Editar viagens",
+                    "Excluir viagens",
+                    "Gerar extrato PDF",
+                    "Gerar extrato HTML",
+                    "Visualizar análises e relatórios",
+                    "Receber email de confirmação"
+                ],
+                key="fb_funcionalidades"
+            )
+            
+            st.markdown("**2.2** Qual funcionalidade você considera mais importante?")
+            funcionalidade_importante = st.text_input(
+                "Funcionalidade mais importante",
+                placeholder="Digite aqui",
+                key="fb_importante"
+            )
+            
+            st.markdown("**2.3** Há alguma funcionalidade que você sente falta?")
+            funcionalidade_falta = st.text_input(
+                "Funcionalidade que falta",
+                placeholder="Digite aqui",
+                key="fb_falta"
+            )
+        
+        # Seção 3: Desempenho
+        with st.expander("🚀 Desempenho e Eficiência"):
+            st.markdown("**3.1** Como você avalia a velocidade de resposta do sistema?")
+            velocidade_sistema = st.radio(
+                "Velocidade",
+                ["Muito Rápido", "Rápido", "Aceitável", "Lento", "Muito Lento"],
+                index=2,
+                key="fb_velocidade",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**3.2** O sistema atende às suas necessidades de forma eficiente?")
+            atende_necessidades = st.radio(
+                "Atende necessidades",
+                ["Sim, plenamente", "Sim, em grande parte", "Parcialmente", "Pouco", "Não atende"],
+                index=1,
+                key="fb_atende",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**3.3** Qual o tempo médio que você gasta para cadastrar uma viagem?")
+            tempo_cadastro = st.radio(
+                "Tempo de cadastro",
+                ["Menos de 2 minutos", "2 a 5 minutos", "5 a 10 minutos", "10 a 15 minutos", "Mais de 15 minutos"],
+                index=1,
+                key="fb_tempo",
+                label_visibility="collapsed"
+            )
+        
+        # Seção 4: Relatórios
+        with st.expander("📊 Relatórios e Extratos"):
+            st.markdown("**4.1** Como você avalia a qualidade dos extratos gerados (PDF/HTML)?")
+            qualidade_extratos = st.radio(
+                "Qualidade dos extratos",
+                ["Excelente", "Bom", "Regular", "Ruim", "Muito Ruim"],
+                index=1,
+                key="fb_qualidade",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**4.2** As informações apresentadas nos relatórios são claras e completas?")
+            relatorios_claros = st.radio(
+                "Relatórios claros",
+                ["Sim, totalmente", "Sim, em grande parte", "Mais ou menos", "Não, são confusas", "Não, faltam informações"],
+                index=1,
+                key="fb_claros",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**4.3** Que tipo de informação você gostaria que fosse adicionada aos relatórios?")
+            info_relatorios = st.text_area(
+                "Informações adicionais",
+                placeholder="Digite aqui",
+                key="fb_info_relatorios",
+                height=80
+            )
+        
+        # Seção 5: Email
+        with st.expander("📧 Email de Confirmação"):
+            st.markdown("**5.1** Você recebe o email de confirmação após cadastrar uma viagem?")
+            recebe_email = st.radio(
+                "Recebe email",
+                ["Sempre", "Na maioria das vezes", "Às vezes", "Raramente", "Nunca"],
+                index=1,
+                key="fb_recebe_email",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**5.2** O email de confirmação é claro e útil?")
+            email_claro = st.radio(
+                "Email claro",
+                ["Sim, muito claro", "Sim, claro", "Mais ou menos", "Não, é confuso", "Não é útil"],
+                index=1,
+                key="fb_email_claro",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**5.3** Você gostaria que o email tivesse mais informações? Quais?")
+            email_melhorias = st.text_area(
+                "Melhorias no email",
+                placeholder="Digite aqui",
+                key="fb_email_melhorias",
+                height=80
+            )
+        
+        # Seção 6: Banco de Dados
+        with st.expander("💾 Banco de Dados e Persistência"):
+            st.markdown("**6.1** Você considera importante que os dados sejam salvos permanentemente no banco de dados?")
+            importancia_banco = st.radio(
+                "Importância do banco",
+                ["Muito importante", "Importante", "Neutro", "Pouco importante", "Não é importante"],
+                index=0,
+                key="fb_banco",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**6.2** Você confia na segurança e integridade dos seus dados?")
+            confianca_dados = st.radio(
+                "Confiança nos dados",
+                ["Confio totalmente", "Confio em grande parte", "Neutro", "Pouco confiável", "Não confio"],
+                index=1,
+                key="fb_confianca",
+                label_visibility="collapsed"
+            )
+        
+        # Seção 7: Satisfação Geral
+        with st.expander("⭐ Satisfação Geral"):
+            st.markdown("**7.1** Em uma escala de 1 a 10, qual sua nota geral para o sistema?")
+            nota_geral = st.slider(
+                "Nota geral",
+                min_value=1,
+                max_value=10,
+                value=8,
+                step=1,
+                key="fb_nota"
+            )
+            st.caption(f"Nota selecionada: {nota_geral} / 10")
+            
+            st.markdown("**7.2** Você recomendaria este sistema para outros usuários?")
+            recomendaria = st.radio(
+                "Recomendaria",
+                ["Sim, definitivamente", "Sim, provavelmente", "Talvez", "Provavelmente não", "Não, definitivamente"],
+                index=0,
+                key="fb_recomendaria",
+                label_visibility="collapsed"
+            )
+        
+        # Seção 8: Sugestões
+        with st.expander("💡 Sugestões de Melhoria"):
+            st.markdown("**8.1** Quais melhorias você sugere para o sistema?")
+            sugestoes_melhoria = st.text_area(
+                "Sugestões",
+                placeholder="Digite aqui suas sugestões",
+                key="fb_sugestoes",
+                height=100
+            )
+            
+            st.markdown("**8.2** O que você mais gosta no sistema?")
+            mais_gosta = st.text_area(
+                "O que mais gosta",
+                placeholder="Digite aqui",
+                key="fb_mais_gosta",
+                height=80
+            )
+            
+            st.markdown("**8.3** O que você menos gosta no sistema?")
+            menos_gosta = st.text_area(
+                "O que menos gosta",
+                placeholder="Digite aqui",
+                key="fb_menos_gosta",
+                height=80
+            )
+        
+        # Seção 9: Uso Futuro
+        with st.expander("🔮 Uso Futuro"):
+            st.markdown("**9.1** Você continuaria usando este sistema no futuro?")
+            continuaria_usando = st.radio(
+                "Continuaria usando",
+                ["Sim", "Talvez", "Não"],
+                index=0,
+                key="fb_continuaria",
+                label_visibility="collapsed"
+            )
+            
+            st.markdown("**9.2** Você gostaria que o sistema fosse expandido para outras áreas?")
+            expansao_futuro = st.text_area(
+                "Expansão para outras áreas",
+                placeholder="Se sim, sugira quais áreas",
+                key="fb_expansao",
+                height=80
+            )
+        
+        # Comentários adicionais
+        st.markdown("---")
+        st.markdown("### 💬 Comentários Adicionais")
+        comentarios_adicionais = st.text_area(
+            "Deixe aqui qualquer outro comentário ou sugestão",
+            placeholder="Digite aqui",
+            key="fb_comentarios",
+            height=100
+        )
+        
+        # Botão de envio
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("📤 Enviar Feedback", type="primary", use_container_width=True):
+                # Preparar dados (sem identificação)
+                feedback_data = {
+                    'data_resposta': datetime.now().strftime('%d/%m/%Y'),
+                    'facilidade_uso': facilidade_uso,
+                    'layout_intuitivo': layout_intuitivo,
+                    'encontrar_funcionalidades': encontrar_funcionalidades,
+                    'funcionalidades_usa': ', '.join(funcionalidades_usa) if funcionalidades_usa else '',
+                    'funcionalidade_importante': funcionalidade_importante,
+                    'funcionalidade_falta': funcionalidade_falta,
+                    'velocidade_sistema': velocidade_sistema,
+                    'atende_necessidades': atende_necessidades,
+                    'tempo_cadastro': tempo_cadastro,
+                    'qualidade_extratos': qualidade_extratos,
+                    'relatorios_claros': relatorios_claros,
+                    'info_relatorios': info_relatorios,
+                    'recebe_email': recebe_email,
+                    'email_claro': email_claro,
+                    'email_melhorias': email_melhorias,
+                    'importancia_banco': importancia_banco,
+                    'confianca_dados': confianca_dados,
+                    'nota_geral': str(nota_geral),
+                    'recomendaria': recomendaria,
+                    'sugestoes_melhoria': sugestoes_melhoria,
+                    'mais_gosta': mais_gosta,
+                    'menos_gosta': menos_gosta,
+                    'continuaria_usando': continuaria_usando,
+                    'expansao_futuro': expansao_futuro,
+                    'comentarios_adicionais': comentarios_adicionais,
+                    'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
+                }
+                
+                try:
+                    db.salvar_feedback(feedback_data)
+                    st.session_state.feedback_enviado = True
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Erro ao enviar feedback: {str(e)}")
+    
+    else:
+        # Mensagem de agradecimento após o envio
+        st.markdown("---")
+        st.markdown("""
+        <div style="
+            background-color: #d4edda;
+            border-left: 6px solid #28a745;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+        ">
+            <h1 style="color: #155724; margin: 0;">🙏 MUITO OBRIGADO!</h1>
+            <p style="color: #155724; font-size: 18px; margin: 15px 0 0 0;">
+                Seu feedback foi enviado com sucesso e é muito importante para nós!
+            </p>
+            <p style="color: #155724; font-size: 16px; margin: 10px 0 0 0;">
+                Sua opinião nos ajuda a melhorar continuamente o sistema.
+            </p>
+            <p style="color: #155724; font-size: 14px; margin: 10px 0 0 0;">
+                🔒 Este feedback é totalmente anônimo.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Botão para enviar novo feedback
+        if st.button("📝 Enviar novo feedback", use_container_width=True):
+            st.session_state.feedback_enviado = False
+            st.rerun()
+        
+        # Mostrar histórico de feedbacks (apenas para administradores - opcional)
+        with st.expander("📊 Ver histórico de feedbacks (Administradores)"):
+            feedbacks = db.carregar_feedbacks()
+            if feedbacks:
+                df_feedback = pd.DataFrame(feedbacks)
+                # Selecionar colunas principais para exibir
+                colunas_exibir = ['id', 'data_resposta', 'nota_geral', 'data_cadastro']
+                df_feedback = df_feedback[colunas_exibir]
+                df_feedback.columns = ['ID', 'Data Resposta', 'Nota', 'Data Cadastro']
+                st.dataframe(df_feedback, use_container_width=True)
+                
+                # Estatísticas rápidas
+                st.markdown("### 📊 Estatísticas Rápidas")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total de Feedbacks", len(feedbacks))
+                with col2:
+                    notas = [int(f.get('nota_geral', 0)) for f in feedbacks if f.get('nota_geral', '').isdigit()]
+                    if notas:
+                        st.metric("Média de Notas", f"{sum(notas)/len(notas):.1f}")
+                with col3:
+                    recomendam = [f for f in feedbacks if 'definitivamente' in f.get('recomendaria', '')]
+                    if recomendam:
+                        st.metric("Recomendam", f"{len(recomendam)} ({len(recomendam)*100//len(feedbacks)}%)")
+            else:
+                st.info("Nenhum feedback cadastrado ainda.")
