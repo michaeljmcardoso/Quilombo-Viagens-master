@@ -157,3 +157,4 @@ cython_debug/
 
 corrigir-banco-de-dados.py
 quilombo-viagens/
+app.py
