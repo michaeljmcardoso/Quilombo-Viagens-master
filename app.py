@@ -245,71 +245,6 @@ class Database:
             feedbacks.append(feedback)
         
         return feedbacks
-    """Classe para gerenciar o banco de dados SQLite"""
-    
-    def __init__(self, db_file="viagens.db"):
-        self.db_file = db_file
-        self.init_db()
-        self.migrar_tabela()
-    
-    def get_connection(self):
-        """Retorna uma conexão com o banco de dados"""
-        return sqlite3.connect(self.db_file)
-    
-    def init_db(self):
-        """Inicializa o banco de dados com as tabelas necessárias"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Criar tabela de viagens com TODAS as colunas necessárias
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS viagens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                comunidade TEXT NOT NULL,
-                municipio TEXT NOT NULL,
-                data_inicio TEXT NOT NULL,
-                data_fim TEXT NOT NULL,
-                quantidade_servidores INTEGER NOT NULL,
-                diarias_por_servidor REAL NOT NULL,
-                dias_totais INTEGER NOT NULL,
-                distancia_rodoviaria REAL NOT NULL,
-                distancia_local REAL NOT NULL,
-                distancia_total REAL NOT NULL,
-                tipo_atividade TEXT NOT NULL,
-                cadastrante TEXT NOT NULL,
-                email_usuario TEXT,
-                data_cadastro TEXT NOT NULL,
-                orcamento_diarias_valor REAL NOT NULL,
-                orcamento_combustivel REAL NOT NULL,
-                orcamento_total_geral REAL NOT NULL,
-                orcamento_diarias_servidor REAL NOT NULL,
-                orcamento_litros_rodoviario REAL NOT NULL,
-                orcamento_litros_local REAL NOT NULL,
-                orcamento_total_litros REAL NOT NULL,
-                orcamento_combustivel_rodoviario REAL NOT NULL,
-                orcamento_combustivel_local REAL NOT NULL
-            )
-        ''')
-        
-        conn.commit()
-        conn.close()
-    
-    def migrar_tabela(self):
-        """Migra a tabela para a versão mais recente se necessário"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Verificar colunas existentes
-        cursor.execute("PRAGMA table_info(viagens)")
-        colunas = [col[1] for col in cursor.fetchall()]
-        
-        # Adicionar colunas faltantes
-        if 'orcamento_combustivel_local' not in colunas:
-            cursor.execute('ALTER TABLE viagens ADD COLUMN orcamento_combustivel_local REAL DEFAULT 0.0')
-            print("✅ Coluna orcamento_combustivel_local adicionada")
-        
-        conn.commit()
-        conn.close()
     
     def salvar_viagem(self, viagem_data):
         """Salva uma viagem no banco de dados"""
@@ -557,6 +492,72 @@ db = Database()
 
 # ==================== FIM BANCO DE DADOS ====================
 
+def comparar_alteracoes(viagem_antiga, viagem_nova):
+    """
+    Compara duas versões da viagem e retorna um dicionário com as alterações
+    """
+    alteracoes = []
+    
+    # Função para converter lista para string
+    def list_to_str(valor):
+        if isinstance(valor, list):
+            return ", ".join(valor)
+        return str(valor)
+    
+    # Campos a serem comparados
+    campos = {
+        'comunidade': '🏘️ Comunidade',
+        'municipio': '📍 Município',
+        'data_inicio': '📅 Data Início',
+        'data_fim': '📅 Data Fim',
+        'quantidade_servidores': '👥 Número de Servidores',
+        'diarias_por_servidor': '🏨 Diárias por Servidor',
+        'dias_totais': '📆 Dias Totais',
+        'distancia_rodoviaria': '🛣️ Distância Rodoviária',
+        'distancia_local': '🚙 Distância Local',
+        'distancia_total': '📏 Distância Total',
+        'tipo_atividade': '📋 Tipo de Atividade',
+        'cadastrante': '👤 Cadastrante'
+    }
+    
+    for campo, label in campos.items():
+        valor_antigo = viagem_antiga.get(campo, '')
+        valor_novo = viagem_nova.get(campo, '')
+        
+        # Converter listas para string para comparação
+        valor_antigo_str = list_to_str(valor_antigo)
+        valor_novo_str = list_to_str(valor_novo)
+        
+        if valor_antigo_str != valor_novo_str:
+            alteracoes.append({
+                'campo': label,
+                'valor_antigo': valor_antigo_str if valor_antigo_str else '(vazio)',
+                'valor_novo': valor_novo_str if valor_novo_str else '(vazio)'
+            })
+    
+    # Comparar orçamento
+    orc_antigo = viagem_antiga.get('orcamento', {})
+    orc_novo = viagem_nova.get('orcamento', {})
+    
+    campos_orcamento = {
+        'total_diarias_valor': '💰 Total Diárias',
+        'total_combustivel': '⛽ Total Combustível',
+        'total_geral': '💵 Total Geral'
+    }
+    
+    for campo, label in campos_orcamento.items():
+        valor_antigo = orc_antigo.get(campo, 0)
+        valor_novo = orc_novo.get(campo, 0)
+        
+        if valor_antigo != valor_novo:
+            alteracoes.append({
+                'campo': label,
+                'valor_antigo': formatar_moeda(valor_antigo),
+                'valor_novo': formatar_moeda(valor_novo)
+            })
+    
+    return alteracoes
+
 def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
     """
     Envia email de confirmação REAL quando uma nova viagem é cadastrada
@@ -617,8 +618,71 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
         print(f"❌ Erro geral: {str(e)}")
         return False, []
 
+def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_antiga=None):
+    """
+    Envia email de confirmação de ALTERAÇÃO quando uma viagem é editada
+    """
+    try:
+        if not EMAIL_ENABLED:
+            print("⚠️ Email desabilitado no .env")
+            return False, False
+        
+        if not EMAIL_REMETENTE or not EMAIL_SENHA:
+            print("⚠️ Configurações de email incompletas")
+            return False, False
+        
+        def formatar_moeda_html(valor):
+            return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        
+        # Comparar alterações
+        alteracoes = []
+        if viagem_antiga:
+            alteracoes = comparar_alteracoes(viagem_antiga, viagem_data)
+        
+        # Criar corpo do email de ALTERAÇÃO
+        html = criar_corpo_email_alteracao(viagem_data, orcamento, formatar_moeda_html, alteracoes)
+        
+        # Lista de destinatários
+        destinatarios = []
+        if EMAIL_DESTINATARIO:
+            destinatarios.append(EMAIL_DESTINATARIO)
+        if email_usuario and email_usuario != EMAIL_DESTINATARIO:
+            destinatarios.append(email_usuario)
+        
+        if not destinatarios:
+            return False, []
+        
+        # Enviar email para cada destinatário
+        enviados = []
+        for destinatario in destinatarios:
+            try:
+                msg = MIMEMultipart('alternative')
+                msg['Subject'] = f"✏️ Viagem ALTERADA - {viagem_data['comunidade']}"
+                msg['From'] = EMAIL_REMETENTE
+                msg['To'] = destinatario
+                
+                html_part = MIMEText(html, 'html')
+                msg.attach(html_part)
+                
+                server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+                server.starttls()
+                server.login(EMAIL_REMETENTE, EMAIL_SENHA)
+                server.send_message(msg)
+                server.quit()
+                
+                enviados.append(destinatario)
+                print(f"✅ Email de alteração enviado para: {destinatario}")
+            except Exception as e:
+                print(f"❌ Erro ao enviar para {destinatario}: {str(e)}")
+        
+        return len(enviados) > 0, enviados
+        
+    except Exception as e:
+        print(f"❌ Erro geral: {str(e)}")
+        return False, []
+
 def criar_corpo_email(viagem_data, orcamento, formatar_moeda_html):
-    """Cria o corpo HTML do email"""
+    """Cria o corpo HTML do email de NOVO CADASTRO"""
     # Converter lista de atividades para string
     atividades = viagem_data['tipo_atividade']
     if isinstance(atividades, list):
@@ -733,6 +797,196 @@ def criar_corpo_email(viagem_data, orcamento, formatar_moeda_html):
                     <div>
                         <div style="font-size: 12px; color: #666;">Combustível</div>
                         <div style="font-size: 20px; color: #2C1810; font-weight: bold;">{formatar_moeda_html(orcamento['total_combustivel'])}</div>
+                    </div>
+                </div>
+                <hr style="border: 1px solid #eee; margin: 10px 0;">
+                <div>
+                    <div style="font-size: 14px; color: #666;">TOTAL GERAL</div>
+                    <div class="total-value">{formatar_moeda_html(orcamento['total_geral'])}</div>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>📧 Este é um email automático gerado pelo <strong>QuilomboViagens</strong>.</p>
+                <p>© 2026 QuilomboViagens - Todos os direitos reservados.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def criar_corpo_email_alteracao(viagem_data, orcamento, formatar_moeda_html, alteracoes):
+    """Cria o corpo HTML do email de ALTERAÇÃO com detalhamento das mudanças"""
+    # Converter lista de atividades para string
+    atividades = viagem_data['tipo_atividade']
+    if isinstance(atividades, list):
+        atividades_str = ", ".join(atividades)
+    else:
+        atividades_str = str(atividades)
+    
+    # Converter comunidades para string
+    comunidades = viagem_data['comunidade']
+    if isinstance(comunidades, list):
+        comunidades_str = ", ".join(comunidades)
+    else:
+        comunidades_str = str(comunidades)
+    
+    # Converter municípios para string
+    municipios = viagem_data['municipio']
+    if isinstance(municipios, list):
+        municipios_str = ", ".join(municipios)
+    else:
+        municipios_str = str(municipios)
+    
+    # Criar tabela de alterações
+    tabela_alteracoes = ""
+    if alteracoes:
+        tabela_alteracoes = """
+        <h3 style="color: #1a237e; margin-top: 20px;">📝 Detalhamento das Alterações</h3>
+        <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
+            <thead>
+                <tr style="background-color: #1a237e; color: white;">
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Campo</th>
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Valor Anterior</th>
+                    <th style="padding: 10px; text-align: left; border: 1px solid #ddd;">Novo Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        
+        for alteracao in alteracoes:
+            tabela_alteracoes += f"""
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">{alteracao['campo']}</td>
+                    <td style="padding: 8px; border: 1px solid #ddd; background-color: #f8d7da; color: #721c24;">
+                        <del>{alteracao['valor_antigo']}</del>
+                    </td>
+                    <td style="padding: 8px; border: 1px solid #ddd; background-color: #d4edda; color: #155724;">
+                        <strong>{alteracao['valor_novo']}</strong>
+                    </td>
+                </tr>
+            """
+        
+        tabela_alteracoes += """
+            </tbody>
+        </table>
+        """
+    else:
+        tabela_alteracoes = """
+        <p style="color: #1a237e; font-size: 14px;">
+            Nenhuma alteração significativa foi detectada nos campos principais.
+        </p>
+        """
+    
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 10px; padding: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+            .header {{ background: linear-gradient(135deg, #1a237e, #283593); padding: 20px; border-radius: 8px; text-align: center; color: white; margin-bottom: 20px; }}
+            .header h1 {{ color: #FFD700; margin: 0; }}
+            .header p {{ color: #DAA520; margin: 5px 0 0 0; }}
+            .info-row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }}
+            .info-label {{ font-weight: bold; color: #555; }}
+            .info-value {{ color: #333; }}
+            .total {{ background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }}
+            .total-value {{ font-size: 28px; color: #1a237e; font-weight: bold; }}
+            .footer {{ margin-top: 30px; text-align: center; color: #999; font-size: 12px; border-top: 1px solid #eee; padding-top: 20px; }}
+            .details {{ margin: 20px 0; }}
+            .highlight {{ background: #E8EAF6; padding: 15px; border-radius: 8px; border-left: 6px solid #1a237e; }}
+            .activity-container {{ margin: 5px 0; }}
+            .badge-alteracao {{ background: #FFD700; color: #1a237e; padding: 5px 15px; border-radius: 20px; font-weight: bold; display: inline-block; }}
+            .resumo-alteracoes {{ background: #f5f5f5; padding: 15px; border-radius: 8px; margin: 10px 0; }}
+            table {{ font-size: 14px; }}
+            td {{ padding: 8px; }}
+            del {{ color: #721c24; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏘️ Divisão Quilombola</h1>
+                <p>Sistema de Cadastramento e Orçamento de Viagens</p>
+            </div>
+            
+            <div class="highlight">
+                <h2 style="color: #1a237e; margin: 0;">✏️ Viagem ALTERADA!</h2>
+                <p style="color: #1a237e; margin: 10px 0 0 0; font-size: 16px;">
+                    <span class="badge-alteracao">ALTERAÇÃO REALIZADA</span>
+                </p>
+                <p style="color: #1a237e; margin: 5px 0 0 0; font-size: 14px;">
+                    Os dados da viagem foram atualizados no sistema.
+                </p>
+                <div class="resumo-alteracoes">
+                    <p style="margin: 0; font-weight: bold; color: #1a237e;">
+                        📊 Total de alterações: {len(alteracoes)}
+                    </p>
+                </div>
+            </div>
+            
+            {tabela_alteracoes}
+            
+            <div class="details">
+                <h3 style="color: #1a237e;">📋 Dados Atualizados da Viagem</h3>
+                
+                <div class="info-row">
+                    <span class="info-label">🏘️ Comunidade:</span>
+                    <span class="info-value"><strong>{comunidades_str}</strong></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">📍 Município:</span>
+                    <span class="info-value">{municipios_str}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">📅 Período:</span>
+                    <span class="info-value">{viagem_data['data_inicio']} a {viagem_data['data_fim']}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">📆 Dias:</span>
+                    <span class="info-value">{viagem_data['dias_totais']} dia(s)</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">👥 Servidores:</span>
+                    <span class="info-value">{viagem_data['quantidade_servidores']}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🏨 Diárias por Servidor:</span>
+                    <span class="info-value">{viagem_data['diarias_por_servidor']:.1f}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🛣️ Distância Rodoviária:</span>
+                    <span class="info-value">{viagem_data['distancia_rodoviaria']:.1f} km</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🚙 Distância Local:</span>
+                    <span class="info-value">{viagem_data['distancia_local']:.1f} km</span>
+                </div>
+                <div class="info-row" style="flex-wrap: wrap;">
+                    <span class="info-label">📋 Atividade:</span>
+                    <span class="info-value"><div class="activity-container">{atividades_str}</div></span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">👤 Cadastrante:</span>
+                    <span class="info-value">{viagem_data['cadastrante']}</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">🕐 Data Alteração:</span>
+                    <span class="info-value">{viagem_data['data_cadastro']}</span>
+                </div>
+            </div>
+            
+            <div class="total">
+                <h3 style="color: #1a237e;">💰 Orçamento Atualizado</h3>
+                <div style="display: flex; justify-content: space-around; margin: 15px 0;">
+                    <div>
+                        <div style="font-size: 12px; color: #666;">Diárias</div>
+                        <div style="font-size: 20px; color: #1a237e; font-weight: bold;">{formatar_moeda_html(orcamento['total_diarias_valor'])}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: #666;">Combustível</div>
+                        <div style="font-size: 20px; color: #1a237e; font-weight: bold;">{formatar_moeda_html(orcamento['total_combustivel'])}</div>
                     </div>
                 </div>
                 <hr style="border: 1px solid #eee; margin: 10px 0;">
@@ -949,12 +1203,19 @@ if 'viagem_cadastrada' not in st.session_state:
 if 'editando_viagem' not in st.session_state:
     st.session_state.editando_viagem = None
 
+# Estado para email
+if 'email_status' not in st.session_state:
+    st.session_state.email_status = None
+
+# Estado para feedback
+if 'feedback_enviado' not in st.session_state:
+    st.session_state.feedback_enviado = False
+
 # ==================== FIM INICIALIZAÇÃO ====================
 
 # Título
 st.subheader("🛻 QuilomboViagens")
 st.markdown("Sistema de Cadastro e Orçamento de Viagens")
-#st.markdown("**Divisão Quilombola - Plano de Ações**")
 
 # Sidebar
 with st.sidebar:
@@ -1381,11 +1642,30 @@ with tab2:
                     }
                     
                     try:
+                        # Atualizar no banco
                         db.atualizar_viagem(viagem_edit['id'], viagem_atualizada)
                         st.session_state.viagens = db.carregar_viagens()
+                        
+                        # Enviar email de alteração
+                        with st.spinner("📧 Enviando email de confirmação de alteração..."):
+                            email_para_envio = email_usuario_edit if email_usuario_edit else viagem_edit.get('email_usuario', '')
+                            email_enviado, destinatarios = enviar_email_alteracao(
+                                viagem_atualizada, 
+                                orcamento_edit, 
+                                email_para_envio
+                            )
+                        
+                        # Limpar estado de edição
                         st.session_state.editando_viagem = None
-                        st.success("✅ Viagem atualizada com sucesso!")
+                        
+                        # Mostrar mensagem de sucesso
+                        if email_enviado:
+                            st.success(f"✅ Viagem atualizada com sucesso! Email de confirmação enviado para: {', '.join(destinatarios)}")
+                        else:
+                            st.success("✅ Viagem atualizada com sucesso! (Email de confirmação não enviado)")
+                        
                         st.rerun()
+                        
                     except Exception as e:
                         st.error(f"❌ Erro ao atualizar: {str(e)}")
             
