@@ -4,3 +4,4 @@ plotly
 openpyxl
 python-dotenv
 reportlab==4.0.7
+gitpython

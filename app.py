@@ -18,6 +18,8 @@ import io
 import sqlite3
 import json
 import constantes
+import github_sync
+from github_sync import sincronizar_github, testar_github, GitHubSync
 
 # Carrega variáveis de ambiente
 load_dotenv()
@@ -1239,7 +1241,14 @@ with st.sidebar:
         st.caption(f"💾 Dados salvos no banco SQLite")
 
 # Abas
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 Nova Viagem", "📋 Lista de Viagens", "📊 Análise e Relatórios", "📄 Meus Extratos", "📝 Feedback"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📝 Nova Viagem", 
+    "📋 Lista de Viagens", 
+    "📊 Análise e Relatórios", 
+    "📄 Meus Extratos", 
+    "📝 Feedback",
+    "🔄 Sincronização"  # Nova aba
+])
 
 with tab1:
     st.markdown("### 📝 Cadastrar Nova Viagem")
@@ -2348,3 +2357,110 @@ with tab5:
                         st.metric("Recomendam", f"{len(recomendam)} ({len(recomendam)*100//len(feedbacks)}%)")
             else:
                 st.info("Nenhum feedback cadastrado ainda.")
+
+# ==================== TAB 6: SINCRONIZAÇÃO ====================
+
+# ==================== TAB 6: SINCRONIZAÇÃO ====================
+
+with tab6:
+    st.markdown("### 🔄 Sincronização com GitHub")
+    st.markdown("Gerencie a sincronização dos dados com o repositório GitHub.")
+    
+    # Verificar configuração
+    sync = GitHubSync()
+    
+    # Status da sincronização
+    st.markdown("#### 📊 Status do Repositório")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("GitHub Habilitado", "✅ Sim" if sync.enabled else "❌ Não")
+        st.metric("Modo Teste", "✅ Ativado" if sync.modo_teste else "❌ Desativado")
+        st.metric("Token Configurado", "✅ Sim" if sync.token else "❌ Não")
+    with col2:
+        st.metric("Repositório", sync.repo_path if sync.repo_path else "Não configurado")
+        if sync.repo:
+            try:
+                ultimo_commit = sync.repo.head.commit
+                st.metric("Último Commit", ultimo_commit.hexsha[:7])
+                st.metric("Autor", f"{ultimo_commit.author.name}")
+            except:
+                st.metric("Status", "Repositório vazio")
+        else:
+            st.metric("Status", "Repositório não encontrado")
+    
+    st.markdown("---")
+    
+    # Testar Configuração
+    st.markdown("#### 🔍 Testar Configuração")
+    if st.button("🔍 Testar Configuração do GitHub", use_container_width=True):
+        with st.spinner("Testando configuração..."):
+            try:
+                sync = testar_github()
+                st.json({
+                    'enabled': sync.enabled,
+                    'modo_teste': sync.modo_teste,
+                    'repo_path': sync.repo_path,
+                    'token_configurado': bool(sync.token),
+                    'remote_configurado': bool(sync.remote_url)
+                })
+                
+                # Fazer um commit de teste se possível
+                if sync.enabled and sync.repo and sync.token:
+                    try:
+                        test_file = os.path.join(sync.repo_path, 'teste_automacao.txt')
+                        with open(test_file, 'w') as f:
+                            f.write(f"Teste automático - {datetime.now()}\n")
+                        
+                        result = sync.commit_e_push("🔧 Teste de automação")
+                        if result['success']:
+                            st.success(f"✅ Teste concluído! {result.get('message', '')}")
+                        else:
+                            st.error(f"❌ Erro no teste: {result.get('error', '')}")
+                    except Exception as e:
+                        st.error(f"❌ Erro: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ Erro ao testar: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Ações
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("📤 Sincronizar Agora", type="primary", use_container_width=True):
+            with st.spinner("🔄 Sincronizando com GitHub..."):
+                result = sincronizar_github("manual")
+                if result['success']:
+                    st.success(f"✅ Sincronização concluída! {result.get('message', '')}")
+                else:
+                    st.error(f"❌ Erro na sincronização: {result.get('error', '')}")
+    
+    with col2:
+        if st.button("📊 Exportar Dados Apenas", use_container_width=True):
+            with st.spinner("📊 Exportando dados..."):
+                sync = GitHubSync()
+                result = sync.exportar_dados()
+                if result['success']:
+                    st.success(f"✅ Dados exportados! {result['total_viagens']} viagens salvas.")
+                    st.info(f"📁 Arquivos salvos em: {sync.repo_path}/dados/")
+                else:
+                    st.error(f"❌ Erro na exportação: {result.get('error', '')}")
+    
+    st.markdown("---")
+    
+    # Configurações
+    with st.expander("⚙️ Configurações do GitHub"):
+        st.markdown("""
+        **Variáveis de ambiente necessárias no .env:**
+        
+        ```env
+        # Configurações do GitHub
+        GITHUB_ENABLED=True
+        GITHUB_MODO_TESTE=False  # True = testar sem push, False = push real
+        GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx  # Seu token aqui
+        GITHUB_REPO_PATH=/home/michael/Quilombo-Viagens-master
+        GITHUB_BRANCH=main
+        GITHUB_USER_NAME=Michael Cardoso
+        GITHUB_USER_EMAIL=michael@email.com
+        """)
