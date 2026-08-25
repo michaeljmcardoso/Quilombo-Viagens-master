@@ -1,5 +1,4 @@
-# github_sync.py - Versão CORRIGIDA
-
+# github_sync.py - Versão para Streamlit Cloud
 import os
 import json
 import pandas as pd
@@ -8,6 +7,18 @@ import git
 from git import Repo, Actor
 import sqlite3
 import subprocess
+import tempfile
+
+def get_repo_path():
+    """Obtém o caminho do repositório automaticamente"""
+    # Se estiver no Streamlit Cloud, usa o diretório atual
+    if 'STREAMLIT_CLOUD' in os.environ or 'STREAMLIT_SHARING' in os.environ:
+        return os.getcwd()
+    # Caso contrário, usa o caminho do .env
+    env_path = os.getenv('GITHUB_REPO_PATH', '')
+    if env_path:
+        return env_path
+    return os.getcwd()
 
 class GitHubSync:
     """Classe para sincronizar dados com o GitHub usando token"""
@@ -15,49 +26,59 @@ class GitHubSync:
     def __init__(self):
         self.enabled = os.getenv('GITHUB_ENABLED', 'False').lower() == 'true'
         self.modo_teste = os.getenv('GITHUB_MODO_TESTE', 'False').lower() == 'true'
-        self.repo_path = os.getenv('GITHUB_REPO_PATH', '')
+        self.repo_path = get_repo_path()  # Caminho automático
         self.branch = os.getenv('GITHUB_BRANCH', 'main')
         self.user_name = os.getenv('GITHUB_USER_NAME', 'QuilomboViagens')
         self.user_email = os.getenv('GITHUB_USER_EMAIL', 'quilomboviagens@gmail.com')
         self.token = os.getenv('GITHUB_TOKEN', '').strip()
         
-        # ===== CORREÇÃO: Usar o mesmo formato que funcionou no terminal =====
-        self.remote_url = None
-        if self.token and self.enabled:
-            # Formato que funcionou no terminal:
-            # https://michaeljmcardoso:TOKEN@github.com/michaeljmcardoso/Quilombo-Viagens-master.git
-            self.remote_url = f"https://{self.user_name}:{self.token}@github.com/{self.user_name}/Quilombo-Viagens-master.git"
-            print(f"🔑 URL configurada com token (tamanho: {len(self.token)})")
-        # ===== FIM CORREÇÃO =====
+        print(f"📁 Repositório path: {self.repo_path}")
+        print(f"📌 Modo teste: {'ATIVADO' if self.modo_teste else 'DESATIVADO'}")
+        print(f"📌 Token configurado: {'✅ Sim' if self.token else '❌ Não'}")
         
+        # Verificar se o diretório é um repositório Git
+        self.repo = None
         if self.enabled and self.repo_path:
             try:
-                self.repo = Repo(self.repo_path)
-                print(f"✅ Repositório GitHub carregado: {self.repo_path}")
-                
-                # Configurar remote com token
-                if self.remote_url:
-                    try:
-                        if 'origin' in self.repo.remotes:
-                            self.repo.remotes.origin.set_url(self.remote_url)
-                        else:
-                            self.repo.create_remote('origin', self.remote_url)
-                        print(f"✅ Remote configurado com token")
-                    except Exception as e:
-                        print(f"⚠️ Erro ao configurar remote: {str(e)}")
+                # Verificar se é um repositório Git
+                git_dir = os.path.join(self.repo_path, '.git')
+                if os.path.exists(git_dir):
+                    self.repo = Repo(self.repo_path)
+                    print(f"✅ Repositório GitHub carregado: {self.repo_path}")
+                    
+                    # Configurar autor para commits
+                    if self.repo:
+                        with self.repo.config_writer() as config:
+                            config.set_value('user', 'name', self.user_name)
+                            config.set_value('user', 'email', self.user_email)
+                else:
+                    print(f"⚠️ Não é um repositório Git: {self.repo_path}")
+                    print("   Inicializando repositório...")
+                    self.repo = Repo.init(self.repo_path)
+                    print(f"✅ Repositório inicializado: {self.repo_path}")
+                    
+                    # Criar README
+                    readme_path = os.path.join(self.repo_path, 'README.md')
+                    if not os.path.exists(readme_path):
+                        with open(readme_path, 'w') as f:
+                            f.write("# QuilomboViagens - Dados\n\nRepositório automático para dados do sistema.")
+                        self.repo.index.add(['README.md'])
+                        self.repo.index.commit("Initial commit")
                         
             except Exception as e:
                 print(f"❌ Erro ao carregar repositório: {str(e)}")
                 self.repo = None
-        else:
-            self.repo = None
-        
-        print(f"📌 Modo teste: {'ATIVADO' if self.modo_teste else 'DESATIVADO'}")
-        print(f"📌 Token configurado: {'✅ Sim' if self.token else '❌ Não'}")
     
     def exportar_dados(self, db_file="viagens.db"):
         """Exporta os dados do banco para JSON e CSV"""
         try:
+            # Verificar se o banco existe
+            if not os.path.exists(db_file):
+                return {
+                    'success': False,
+                    'error': f'Banco de dados não encontrado: {db_file}'
+                }
+            
             # Conectar ao banco
             conn = sqlite3.connect(db_file)
             
@@ -72,7 +93,7 @@ class GitHubSync:
             
             conn.close()
             
-            # Criar diretório de dados se não existir
+            # Criar diretório de dados
             data_dir = os.path.join(self.repo_path, 'dados')
             os.makedirs(data_dir, exist_ok=True)
             
@@ -83,11 +104,10 @@ class GitHubSync:
             csv_path_viagens = os.path.join(data_dir, f'viagens_{timestamp}.csv')
             df_viagens.to_csv(csv_path_viagens, index=False, encoding='utf-8-sig')
             
-            # Exportar viagens (versão mais recente sempre)
             csv_path_viagens_latest = os.path.join(data_dir, 'viagens_latest.csv')
             df_viagens.to_csv(csv_path_viagens_latest, index=False, encoding='utf-8-sig')
             
-            # Exportar feedbacks se houver
+            # Exportar feedbacks
             if not df_feedback.empty:
                 csv_path_feedback = os.path.join(data_dir, f'feedback_{timestamp}.csv')
                 df_feedback.to_csv(csv_path_feedback, index=False, encoding='utf-8-sig')
@@ -95,7 +115,7 @@ class GitHubSync:
                 csv_path_feedback_latest = os.path.join(data_dir, 'feedback_latest.csv')
                 df_feedback.to_csv(csv_path_feedback_latest, index=False, encoding='utf-8-sig')
             
-            # Exportar como JSON
+            # Exportar JSON
             json_path = os.path.join(data_dir, f'dados_{timestamp}.json')
             dados = {
                 'data_exportacao': timestamp,
@@ -107,7 +127,6 @@ class GitHubSync:
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
             
-            # JSON mais recente
             json_path_latest = os.path.join(data_dir, 'dados_latest.json')
             with open(json_path_latest, 'w', encoding='utf-8') as f:
                 json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
@@ -115,8 +134,6 @@ class GitHubSync:
             return {
                 'success': True,
                 'timestamp': timestamp,
-                'csv_path': csv_path_viagens,
-                'json_path': json_path,
                 'total_viagens': len(df_viagens)
             }
             
@@ -127,7 +144,7 @@ class GitHubSync:
             }
     
     def commit_e_push(self, mensagem="Atualização automática do sistema"):
-        """Faz commit e push das alterações para o GitHub usando token"""
+        """Faz commit e push das alterações para o GitHub"""
         if not self.enabled or not self.repo:
             return {
                 'success': False,
@@ -137,46 +154,38 @@ class GitHubSync:
         if not self.token and not self.modo_teste:
             return {
                 'success': False,
-                'error': 'Token não configurado. Configure GITHUB_TOKEN no .env'
+                'error': 'Token não configurado'
             }
         
         try:
             # Adicionar todas as alterações
             self.repo.index.add('*')
             
-            # Verificar se há alterações para commit
+            # Verificar se há alterações
             if not self.repo.index.diff('HEAD'):
                 return {
                     'success': True,
                     'message': 'Nenhuma alteração para commitar'
                 }
             
-            # Configurar autor
-            author = Actor(self.user_name, self.user_email)
-            
             # Fazer commit
+            author = Actor(self.user_name, self.user_email)
             commit_message = f"{mensagem} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
             self.repo.index.commit(commit_message, author=author)
             commit_hash = self.repo.head.commit.hexsha[:7]
             
-            # Se for modo teste, não faz push
             if self.modo_teste:
                 return {
                     'success': True,
-                    'message': f'✅ Commit feito no modo teste (sem push): {commit_message}',
-                    'commit_hash': commit_hash,
-                    'modo_teste': True
+                    'message': f'✅ Commit no modo teste: {commit_message}',
+                    'commit_hash': commit_hash
                 }
             
-            # ===== CORREÇÃO: Usar subprocess com a URL correta =====
-            print(f"📤 Enviando para GitHub...")
-            
-            # Configurar a URL correta para o push
+            # Fazer push usando subprocess
             remote_url = f"https://{self.user_name}:{self.token}@github.com/{self.user_name}/Quilombo-Viagens-master.git"
             
-            # Usar subprocess para push com a URL correta
             result = subprocess.run(
-                ['git', 'push', remote_url, self.branch],
+                ['git', 'push', remote_url, f'HEAD:{self.branch}'],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True
@@ -185,13 +194,11 @@ class GitHubSync:
             if result.returncode == 0:
                 return {
                     'success': True,
-                    'message': f'Commit enviado com sucesso: {commit_message}',
-                    'commit_hash': commit_hash,
-                    'output': result.stdout
+                    'message': f'✅ Commit enviado: {commit_message}',
+                    'commit_hash': commit_hash
                 }
             else:
-                # Se falhar, tentar com o remote configurado
-                print("⚠️ Push com URL direta falhou, tentando com remote...")
+                # Tentar com git push normal
                 result2 = subprocess.run(
                     ['git', 'push', 'origin', self.branch],
                     cwd=self.repo_path,
@@ -202,29 +209,19 @@ class GitHubSync:
                 if result2.returncode == 0:
                     return {
                         'success': True,
-                        'message': f'Commit enviado com sucesso (via remote): {commit_message}',
-                        'commit_hash': commit_hash,
-                        'output': result2.stdout
+                        'message': f'✅ Commit enviado (via origin): {commit_message}',
+                        'commit_hash': commit_hash
                     }
                 else:
                     return {
                         'success': False,
-                        'error': f'Erro no push: {result2.stderr}',
-                        'output': result2.stderr
+                        'error': result2.stderr
                     }
-            # ===== FIM CORREÇÃO =====
             
         except Exception as e:
-            error_msg = str(e)
-            if 'authentication' in error_msg.lower() or '403' in error_msg:
-                return {
-                    'success': False,
-                    'error': 'Erro de autenticação. Verifique o token.',
-                    'detalhes': error_msg
-                }
             return {
                 'success': False,
-                'error': error_msg
+                'error': str(e)
             }
     
     def sincronizar(self, acao="cadastro", viagem_data=None):
@@ -240,29 +237,24 @@ class GitHubSync:
         if not export_result['success']:
             return export_result
         
-        # Montar mensagem de commit
+        # Montar mensagem
         if acao == "cadastro":
-            mensagem = f"📝 Nova viagem cadastrada"
+            mensagem = "📝 Nova viagem cadastrada"
             if viagem_data:
                 comunidade = viagem_data.get('comunidade', '')
                 if isinstance(comunidade, list):
                     comunidade = ", ".join(comunidade)
-                mensagem += f" - {comunidade}"
+                if comunidade:
+                    mensagem += f" - {comunidade}"
         elif acao == "edicao":
             mensagem = "✏️ Viagem editada"
-            if viagem_data:
-                comunidade = viagem_data.get('comunidade', '')
-                if isinstance(comunidade, list):
-                    comunidade = ", ".join(comunidade)
-                mensagem += f" - {comunidade}"
         elif acao == "exclusao":
             mensagem = "🗑️ Viagem excluída"
         elif acao == "feedback":
             mensagem = "📝 Novo feedback recebido"
         else:
-            mensagem = f"🔄 Sincronização automática - {acao}"
+            mensagem = f"🔄 Sincronização - {acao}"
         
-        # Fazer commit e push
         return self.commit_e_push(mensagem)
 
 def sincronizar_github(acao="cadastro", viagem_data=None):
@@ -272,13 +264,13 @@ def sincronizar_github(acao="cadastro", viagem_data=None):
     if not sync.enabled:
         return {
             'success': False,
-            'error': 'GitHub não habilitado. Configure GITHUB_ENABLED=True no .env'
+            'error': 'GitHub não habilitado'
         }
     
     if not sync.repo:
         return {
             'success': False,
-            'error': 'Repositório não encontrado. Verifique GITHUB_REPO_PATH'
+            'error': 'Repositório não encontrado'
         }
     
     return sync.sincronizar(acao, viagem_data)
@@ -287,20 +279,10 @@ def testar_github():
     """Testa a configuração do GitHub"""
     sync = GitHubSync()
     
-    print("🔍 TESTANDO CONFIGURAÇÃO DO GITHUB")
-    print("-" * 40)
-    print(f"GitHub Habilitado: {sync.enabled}")
-    print(f"Modo Teste: {sync.modo_teste}")
-    print(f"Repo Path: {sync.repo_path}")
-    print(f"Branch: {sync.branch}")
-    print(f"Token Configurado: {'✅ Sim' if sync.token else '❌ Não'}")
-    print(f"Remote URL: {sync.remote_url}")
-    
-    if sync.repo:
-        try:
-            status = sync.repo.git.status()
-            print(f"Status do Repo:\n{status}")
-        except:
-            pass
-    
-    return sync
+    return {
+        'enabled': sync.enabled,
+        'modo_teste': sync.modo_teste,
+        'repo_path': sync.repo_path,
+        'token_configurado': bool(sync.token),
+        'repo_carregado': bool(sync.repo)
+    }
