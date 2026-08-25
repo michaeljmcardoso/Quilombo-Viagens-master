@@ -1998,8 +1998,8 @@ with tab4:
 
 with tab5:
     st.markdown("### 📝 Formulário de Feedback")
-    st.markdown("Sua opinião é muito importante para melhorarmos o sistema!")
-    st.markdown("**🔒 Este formulário é totalmente anônimo.**")
+    #st.markdown("Sua opinião é muito importante para melhorarmos o sistema!")
+    #st.markdown("**🔒 Este formulário é totalmente anônimo.**")
     st.markdown("---")
     
     # Inicializar estado do feedback
