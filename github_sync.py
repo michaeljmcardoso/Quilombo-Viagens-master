@@ -1,4 +1,5 @@
-# github_sync.py
+# github_sync.py - Versão CORRIGIDA
+
 import os
 import json
 import pandas as pd
@@ -18,12 +19,16 @@ class GitHubSync:
         self.branch = os.getenv('GITHUB_BRANCH', 'main')
         self.user_name = os.getenv('GITHUB_USER_NAME', 'QuilomboViagens')
         self.user_email = os.getenv('GITHUB_USER_EMAIL', 'quilomboviagens@gmail.com')
-        self.token = os.getenv('GITHUB_TOKEN', '')
+        self.token = os.getenv('GITHUB_TOKEN', '').strip()
         
-        # Configurar URL com token se disponível
+        # ===== CORREÇÃO: Usar o mesmo formato que funcionou no terminal =====
         self.remote_url = None
         if self.token and self.enabled:
-            self.remote_url = f"https://{self.token}@github.com/michaeljmcardoso/Quilombo-Viagens-master.git"
+            # Formato que funcionou no terminal:
+            # https://michaeljmcardoso:TOKEN@github.com/michaeljmcardoso/Quilombo-Viagens-master.git
+            self.remote_url = f"https://{self.user_name}:{self.token}@github.com/{self.user_name}/Quilombo-Viagens-master.git"
+            print(f"🔑 URL configurada com token (tamanho: {len(self.token)})")
+        # ===== FIM CORREÇÃO =====
         
         if self.enabled and self.repo_path:
             try:
@@ -163,10 +168,15 @@ class GitHubSync:
                     'modo_teste': True
                 }
             
-            # Fazer push usando subprocess
-            print(f"📤 Enviando para GitHub com token...")
+            # ===== CORREÇÃO: Usar subprocess com a URL correta =====
+            print(f"📤 Enviando para GitHub...")
+            
+            # Configurar a URL correta para o push
+            remote_url = f"https://{self.user_name}:{self.token}@github.com/{self.user_name}/Quilombo-Viagens-master.git"
+            
+            # Usar subprocess para push com a URL correta
             result = subprocess.run(
-                ['git', 'push', 'origin', self.branch],
+                ['git', 'push', remote_url, self.branch],
                 cwd=self.repo_path,
                 capture_output=True,
                 text=True
@@ -180,11 +190,29 @@ class GitHubSync:
                     'output': result.stdout
                 }
             else:
-                return {
-                    'success': False,
-                    'error': f'Erro no push: {result.stderr}',
-                    'output': result.stderr
-                }
+                # Se falhar, tentar com o remote configurado
+                print("⚠️ Push com URL direta falhou, tentando com remote...")
+                result2 = subprocess.run(
+                    ['git', 'push', 'origin', self.branch],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result2.returncode == 0:
+                    return {
+                        'success': True,
+                        'message': f'Commit enviado com sucesso (via remote): {commit_message}',
+                        'commit_hash': commit_hash,
+                        'output': result2.stdout
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'error': f'Erro no push: {result2.stderr}',
+                        'output': result2.stderr
+                    }
+            # ===== FIM CORREÇÃO =====
             
         except Exception as e:
             error_msg = str(e)
@@ -266,7 +294,7 @@ def testar_github():
     print(f"Repo Path: {sync.repo_path}")
     print(f"Branch: {sync.branch}")
     print(f"Token Configurado: {'✅ Sim' if sync.token else '❌ Não'}")
-    print(f"Remote Configurado: {'✅ Sim' if sync.remote_url else '❌ Não'}")
+    print(f"Remote URL: {sync.remote_url}")
     
     if sync.repo:
         try:
