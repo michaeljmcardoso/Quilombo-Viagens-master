@@ -157,3 +157,7 @@ cython_debug/
 
 corrigir-banco-de-dados.py
 quilombo-viagens/
+quilomboviagens/
+test_token.txt
+teste_automação.txt
+teste.txt
