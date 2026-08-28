@@ -8,6 +8,7 @@ __pycache__/
 env/
 venv/
 quilomboviagens/
+quilombo-viagens/
 lib/
 lib64/
 include/
@@ -15,11 +16,11 @@ share/
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Banco de dados
-*.db
+# Banco de dados - SOMENTE arquivos temporários
 *.db-journal
-*.sqlite
-*.sqlite3
+*.db-wal
+*.db-shm
+# O viagens.db NÃO está ignorado!
 
 # Dados exportados
 dados/

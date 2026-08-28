@@ -1,4 +1,4 @@
-# github_sync.py - Versão para Streamlit Cloud
+# github_sync.py
 import os
 import json
 import pandas as pd
@@ -7,7 +7,7 @@ import git
 from git import Repo, Actor
 import sqlite3
 import subprocess
-import tempfile
+import shutil
 
 def get_repo_path():
     """Obtém o caminho do repositório automaticamente"""
@@ -26,7 +26,7 @@ class GitHubSync:
     def __init__(self):
         self.enabled = os.getenv('GITHUB_ENABLED', 'False').lower() == 'true'
         self.modo_teste = os.getenv('GITHUB_MODO_TESTE', 'False').lower() == 'true'
-        self.repo_path = get_repo_path()  # Caminho automático
+        self.repo_path = get_repo_path()
         self.branch = os.getenv('GITHUB_BRANCH', 'main')
         self.user_name = os.getenv('GITHUB_USER_NAME', 'QuilomboViagens')
         self.user_email = os.getenv('GITHUB_USER_EMAIL', 'quilomboviagens@gmail.com')
@@ -40,7 +40,6 @@ class GitHubSync:
         self.repo = None
         if self.enabled and self.repo_path:
             try:
-                # Verificar se é um repositório Git
                 git_dir = os.path.join(self.repo_path, '.git')
                 if os.path.exists(git_dir):
                     self.repo = Repo(self.repo_path)
@@ -69,8 +68,23 @@ class GitHubSync:
                 print(f"❌ Erro ao carregar repositório: {str(e)}")
                 self.repo = None
     
+    def fazer_backup_banco(self):
+        """Faz backup do banco de dados antes do commit"""
+        db_path = os.path.join(self.repo_path, 'viagens.db')
+        if os.path.exists(db_path):
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            backup_path = os.path.join(self.repo_path, f'backup_viagens_{timestamp}.db')
+            shutil.copy2(db_path, backup_path)
+            print(f"✅ Backup criado: {backup_path}")
+            
+            # Adicionar backup ao Git
+            if self.repo:
+                self.repo.index.add([f'backup_viagens_{timestamp}.db'])
+            return backup_path
+        return None
+    
     def exportar_dados(self, db_file="viagens.db"):
-        """Exporta os dados do banco para JSON e CSV"""
+        """Exporta os dados do banco para JSON, CSV e SQL dump"""
         try:
             # Verificar se o banco existe
             if not os.path.exists(db_file):
@@ -131,10 +145,33 @@ class GitHubSync:
             with open(json_path_latest, 'w', encoding='utf-8') as f:
                 json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
             
+            # Criar dump SQL do banco
+            dump_path = os.path.join(self.repo_path, f'dump_viagens_{timestamp}.sql')
+            try:
+                result = subprocess.run(
+                    ['sqlite3', db_file, '.dump'],
+                    capture_output=True,
+                    text=True,
+                    cwd=self.repo_path
+                )
+                if result.returncode == 0:
+                    with open(dump_path, 'w', encoding='utf-8') as f:
+                        f.write(result.stdout)
+                    print(f"✅ Dump SQL criado: {dump_path}")
+                    
+                    # Adicionar dump ao Git
+                    if self.repo:
+                        self.repo.index.add([dump_path])
+            except Exception as e:
+                print(f"⚠️ Erro ao criar dump SQL: {str(e)}")
+            
             return {
                 'success': True,
                 'timestamp': timestamp,
-                'total_viagens': len(df_viagens)
+                'total_viagens': len(df_viagens),
+                'csv_path': csv_path_viagens,
+                'json_path': json_path,
+                'dump_path': dump_path
             }
             
         except Exception as e:
@@ -158,7 +195,18 @@ class GitHubSync:
             }
         
         try:
-            # Adicionar todas as alterações
+            # ===== FAZER BACKUP DO BANCO =====
+            self.fazer_backup_banco()
+            # ===== FIM BACKUP =====
+            
+            # ===== GARANTIR QUE O BANCO DE DADOS SEJA ADICIONADO =====
+            db_path = os.path.join(self.repo_path, 'viagens.db')
+            if os.path.exists(db_path):
+                self.repo.index.add(['viagens.db'])
+                print(f"✅ Banco de dados adicionado: {db_path}")
+            # ===== FIM =====
+            
+            # Adicionar todas as outras alterações
             self.repo.index.add('*')
             
             # Verificar se há alterações
@@ -248,6 +296,12 @@ class GitHubSync:
                     mensagem += f" - {comunidade}"
         elif acao == "edicao":
             mensagem = "✏️ Viagem editada"
+            if viagem_data:
+                comunidade = viagem_data.get('comunidade', '')
+                if isinstance(comunidade, list):
+                    comunidade = ", ".join(comunidade)
+                if comunidade:
+                    mensagem += f" - {comunidade}"
         elif acao == "exclusao":
             mensagem = "🗑️ Viagem excluída"
         elif acao == "feedback":
