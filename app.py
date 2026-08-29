@@ -2317,8 +2317,10 @@ with tab6:
     st.markdown("### 🔄 Sincronização com GitHub")
     st.markdown("Gerencie a sincronização dos dados com o repositório GitHub.")
     
+    # Criar instância do GitHubSync
     sync = GitHubSync()
     
+    # Status da sincronização
     st.markdown("#### 📊 Status do Repositório")
     
     col1, col2 = st.columns(2)
@@ -2340,11 +2342,12 @@ with tab6:
     
     st.markdown("---")
     
+    # Testar Configuração - CORRIGIDO
     st.markdown("#### 🔍 Testar Configuração")
     if st.button("🔍 Testar Configuração do GitHub", use_container_width=True):
         with st.spinner("Testando configuração..."):
             try:
-                sync = testar_github()
+                # Usar a instância já criada
                 st.json({
                     'enabled': sync.enabled,
                     'modo_teste': sync.modo_teste,
@@ -2353,6 +2356,7 @@ with tab6:
                     'repo_carregado': bool(sync.repo)
                 })
                 
+                # Fazer um commit de teste se possível
                 if sync.enabled and sync.repo and sync.token:
                     try:
                         test_file = os.path.join(sync.repo_path, 'teste_automacao.txt')
@@ -2371,6 +2375,7 @@ with tab6:
     
     st.markdown("---")
     
+    # Ações
     col1, col2 = st.columns(2)
     
     with col1:
@@ -2395,6 +2400,7 @@ with tab6:
     
     st.markdown("---")
     
+    # Configurações
     with st.expander("⚙️ Configurações do GitHub"):
         st.markdown("""
         **Variáveis de ambiente necessárias no .env:**
@@ -2402,10 +2408,10 @@ with tab6:
         ```env
         # Configurações do GitHub
         GITHUB_ENABLED=True
-        GITHUB_MODO_TESTE=False
-        GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx
+        GITHUB_MODO_TESTE=False  # True = testar sem push, False = push real
+        GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx  # Seu token aqui
         GITHUB_REPO_PATH=/home/michael/Quilombo-Viagens-master
         GITHUB_BRANCH=main
         GITHUB_USER_NAME=michaeljmcardoso
-        GITHUB_USER_EMAIL=michaelmiranda38@yahoo.com.br
+        GITHUB_USER_EMAIL=michaelmiranda38@yahoo.com.br```
     """)
