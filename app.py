@@ -45,6 +45,55 @@ EMAIL_REMETENTE = os.getenv('EMAIL_REMETENTE', '')
 EMAIL_SENHA = os.getenv('EMAIL_SENHA', '')
 EMAIL_DESTINATARIO = os.getenv('EMAIL_DESTINATARIO', '')
 
+# ==================== VERIFICAR E RESTAURAR BANCO DE DADOS ====================
+def verificar_restaurar_banco():
+    """Verifica se o banco existe, se não, tenta restaurar de backups"""
+    if not os.path.exists('viagens.db'):
+        print("⚠️ Banco de dados não encontrado! Tentando restaurar...")
+        
+        # Procurar por dumps SQL
+        import glob
+        dumps = glob.glob('dump_viagens_*.sql')
+        backups = glob.glob('backup_viagens_*.db')
+        
+        if dumps:
+            # Restaurar do dump mais recente
+            ultimo_dump = sorted(dumps)[-1]
+            print(f"📂 Restaurando de: {ultimo_dump}")
+            
+            try:
+                conn = sqlite3.connect('viagens.db')
+                with open(ultimo_dump, 'r', encoding='utf-8') as f:
+                    sql = f.read()
+                    conn.executescript(sql)
+                conn.close()
+                print("✅ Banco restaurado do dump SQL!")
+                return True
+            except Exception as e:
+                print(f"❌ Erro ao restaurar: {str(e)}")
+        
+        if backups:
+            # Restaurar do backup mais recente
+            ultimo_backup = sorted(backups)[-1]
+            print(f"📂 Restaurando de: {ultimo_backup}")
+            
+            try:
+                shutil.copy2(ultimo_backup, 'viagens.db')
+                print("✅ Banco restaurado do backup!")
+                return True
+            except Exception as e:
+                print(f"❌ Erro ao restaurar: {str(e)}")
+        
+        print("❌ Nenhum backup encontrado! Criando banco vazio.")
+        return False
+    
+    print("✅ Banco de dados encontrado!")
+    return True
+
+# Executar verificação na inicialização
+verificar_restaurar_banco()
+# ==================== FIM VERIFICAÇÃO ====================
+
 # ==================== BANCO DE DADOS ====================
 
 class Database:
@@ -494,19 +543,17 @@ db = Database()
 
 # ==================== FIM BANCO DE DADOS ====================
 
+# ==================== FUNÇÕES DE COMPARAÇÃO E EMAIL ====================
+
 def comparar_alteracoes(viagem_antiga, viagem_nova):
-    """
-    Compara duas versões da viagem e retorna um dicionário com as alterações
-    """
+    """Compara duas versões da viagem e retorna um dicionário com as alterações"""
     alteracoes = []
     
-    # Função para converter lista para string
     def list_to_str(valor):
         if isinstance(valor, list):
             return ", ".join(valor)
         return str(valor)
     
-    # Campos a serem comparados
     campos = {
         'comunidade': '🏘️ Comunidade',
         'municipio': '📍 Município',
@@ -525,8 +572,6 @@ def comparar_alteracoes(viagem_antiga, viagem_nova):
     for campo, label in campos.items():
         valor_antigo = viagem_antiga.get(campo, '')
         valor_novo = viagem_nova.get(campo, '')
-        
-        # Converter listas para string para comparação
         valor_antigo_str = list_to_str(valor_antigo)
         valor_novo_str = list_to_str(valor_novo)
         
@@ -537,7 +582,6 @@ def comparar_alteracoes(viagem_antiga, viagem_nova):
                 'valor_novo': valor_novo_str if valor_novo_str else '(vazio)'
             })
     
-    # Comparar orçamento
     orc_antigo = viagem_antiga.get('orcamento', {})
     orc_novo = viagem_nova.get('orcamento', {})
     
@@ -550,7 +594,6 @@ def comparar_alteracoes(viagem_antiga, viagem_nova):
     for campo, label in campos_orcamento.items():
         valor_antigo = orc_antigo.get(campo, 0)
         valor_novo = orc_novo.get(campo, 0)
-        
         if valor_antigo != valor_novo:
             alteracoes.append({
                 'campo': label,
@@ -561,10 +604,7 @@ def comparar_alteracoes(viagem_antiga, viagem_nova):
     return alteracoes
 
 def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
-    """
-    Envia email de confirmação REAL quando uma nova viagem é cadastrada
-    Pode enviar para o destinatário principal e para o usuário
-    """
+    """Envia email de confirmação de NOVO CADASTRO"""
     try:
         if not EMAIL_ENABLED:
             print("⚠️ Email desabilitado no .env")
@@ -577,10 +617,8 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
         def formatar_moeda_html(valor):
             return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         
-        # Criar corpo do email (MESMO para todos os destinatários)
         html = criar_corpo_email(viagem_data, orcamento, formatar_moeda_html)
         
-        # Lista de destinatários (inclui o principal e o usuário)
         destinatarios = []
         if EMAIL_DESTINATARIO:
             destinatarios.append(EMAIL_DESTINATARIO)
@@ -590,7 +628,6 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
         if not destinatarios:
             return False, []
         
-        # Enviar o MESMO email para cada destinatário
         enviados = []
         for destinatario in destinatarios:
             try:
@@ -598,8 +635,6 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
                 msg['Subject'] = f"✅ Nova Viagem Cadastrada - {viagem_data['comunidade']}"
                 msg['From'] = EMAIL_REMETENTE
                 msg['To'] = destinatario
-                
-                # MESMO corpo HTML para todos
                 html_part = MIMEText(html, 'html')
                 msg.attach(html_part)
                 
@@ -608,7 +643,6 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
                 server.login(EMAIL_REMETENTE, EMAIL_SENHA)
                 server.send_message(msg)
                 server.quit()
-                
                 enviados.append(destinatario)
                 print(f"✅ Email enviado para: {destinatario}")
             except Exception as e:
@@ -621,9 +655,7 @@ def enviar_email_confirmacao(viagem_data, orcamento, email_usuario=None):
         return False, []
 
 def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_antiga=None):
-    """
-    Envia email de confirmação de ALTERAÇÃO quando uma viagem é editada
-    """
+    """Envia email de confirmação de ALTERAÇÃO"""
     try:
         if not EMAIL_ENABLED:
             print("⚠️ Email desabilitado no .env")
@@ -636,15 +668,12 @@ def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_an
         def formatar_moeda_html(valor):
             return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
         
-        # Comparar alterações
         alteracoes = []
         if viagem_antiga:
             alteracoes = comparar_alteracoes(viagem_antiga, viagem_data)
         
-        # Criar corpo do email de ALTERAÇÃO
         html = criar_corpo_email_alteracao(viagem_data, orcamento, formatar_moeda_html, alteracoes)
         
-        # Lista de destinatários
         destinatarios = []
         if EMAIL_DESTINATARIO:
             destinatarios.append(EMAIL_DESTINATARIO)
@@ -654,7 +683,6 @@ def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_an
         if not destinatarios:
             return False, []
         
-        # Enviar email para cada destinatário
         enviados = []
         for destinatario in destinatarios:
             try:
@@ -662,7 +690,6 @@ def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_an
                 msg['Subject'] = f"✏️ Viagem ALTERADA - {viagem_data['comunidade']}"
                 msg['From'] = EMAIL_REMETENTE
                 msg['To'] = destinatario
-                
                 html_part = MIMEText(html, 'html')
                 msg.attach(html_part)
                 
@@ -671,7 +698,6 @@ def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_an
                 server.login(EMAIL_REMETENTE, EMAIL_SENHA)
                 server.send_message(msg)
                 server.quit()
-                
                 enviados.append(destinatario)
                 print(f"✅ Email de alteração enviado para: {destinatario}")
             except Exception as e:
@@ -685,21 +711,18 @@ def enviar_email_alteracao(viagem_data, orcamento, email_usuario=None, viagem_an
 
 def criar_corpo_email(viagem_data, orcamento, formatar_moeda_html):
     """Cria o corpo HTML do email de NOVO CADASTRO"""
-    # Converter lista de atividades para string
     atividades = viagem_data['tipo_atividade']
     if isinstance(atividades, list):
         atividades_str = ", ".join(atividades)
     else:
         atividades_str = str(atividades)
     
-    # Converter comunidades para string
     comunidades = viagem_data['comunidade']
     if isinstance(comunidades, list):
         comunidades_str = ", ".join(comunidades)
     else:
         comunidades_str = str(comunidades)
     
-    # Converter municípios para string
     municipios = viagem_data['municipio']
     if isinstance(municipios, list):
         municipios_str = ", ".join(municipios)
@@ -819,28 +842,24 @@ def criar_corpo_email(viagem_data, orcamento, formatar_moeda_html):
 
 def criar_corpo_email_alteracao(viagem_data, orcamento, formatar_moeda_html, alteracoes):
     """Cria o corpo HTML do email de ALTERAÇÃO com detalhamento das mudanças"""
-    # Converter lista de atividades para string
     atividades = viagem_data['tipo_atividade']
     if isinstance(atividades, list):
         atividades_str = ", ".join(atividades)
     else:
         atividades_str = str(atividades)
     
-    # Converter comunidades para string
     comunidades = viagem_data['comunidade']
     if isinstance(comunidades, list):
         comunidades_str = ", ".join(comunidades)
     else:
         comunidades_str = str(comunidades)
     
-    # Converter municípios para string
     municipios = viagem_data['municipio']
     if isinstance(municipios, list):
         municipios_str = ", ".join(municipios)
     else:
         municipios_str = str(municipios)
     
-    # Criar tabela de alterações
     tabela_alteracoes = ""
     if alteracoes:
         tabela_alteracoes = """
@@ -1013,7 +1032,6 @@ def gerar_pdf_extrato(viagem_data, orcamento):
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
     
-    # Estilos personalizados
     titulo_style = ParagraphStyle(
         'Titulo',
         parent=styles['Heading1'],
@@ -1048,30 +1066,16 @@ def gerar_pdf_extrato(viagem_data, orcamento):
         alignment=TA_RIGHT
     )
     
-    total_style = ParagraphStyle(
-        'Total',
-        parent=styles['Normal'],
-        fontSize=14,
-        textColor=colors.HexColor('#2C1810'),
-        alignment=TA_CENTER,
-        spaceAfter=10
-    )
-    
-    # Elementos do PDF
     elementos = []
-    
-    # Título
     elementos.append(Paragraph("🏘️ DIVISÃO QUILOMBOLA", titulo_style))
     elementos.append(Paragraph("Extrato de Viagem", subtitulo_style))
     elementos.append(Spacer(1, 0.5*cm))
     
-    # Função para converter lista para string
     def list_to_string(valor):
         if isinstance(valor, list):
             return ", ".join(valor)
         return str(valor)
     
-    # Dados da viagem
     dados = [
         ["Comunidade:", list_to_string(viagem_data['comunidade'])],
         ["Município:", list_to_string(viagem_data['municipio'])],
@@ -1086,7 +1090,6 @@ def gerar_pdf_extrato(viagem_data, orcamento):
         ["Data Cadastro:", viagem_data['data_cadastro']]
     ]
     
-    # Criar tabela de dados
     tabela_dados = []
     for label, value in dados:
         tabela_dados.append([
@@ -1105,7 +1108,6 @@ def gerar_pdf_extrato(viagem_data, orcamento):
     elementos.append(tabela)
     elementos.append(Spacer(1, 1*cm))
     
-    # Orçamento
     elementos.append(Paragraph("💰 ORÇAMENTO", styles['Heading3']))
     elementos.append(Spacer(1, 0.3*cm))
     
@@ -1129,12 +1131,10 @@ def gerar_pdf_extrato(viagem_data, orcamento):
     ]))
     elementos.append(tabela_orcamento)
     
-    # Rodapé
     elementos.append(Spacer(1, 1*cm))
     elementos.append(Paragraph("Documento gerado automaticamente pelo Sistema QuilomboViagens", styles['Normal']))
     elementos.append(Paragraph(f"Gerado em: {datetime.now().strftime('%d/%m/%Y %H:%M')}", styles['Normal']))
     
-    # Construir PDF
     doc.build(elementos)
     buffer.seek(0)
     return buffer
@@ -1192,24 +1192,18 @@ def get_download_link(df, filename):
 
 # ==================== INICIALIZAÇÃO DA SESSÃO ====================
 
-# Inicializar sessão
 if 'viagens' not in st.session_state:
-    # Carregar do banco de dados
     st.session_state.viagens = db.carregar_viagens()
 
-# Flag para controlar se já cadastrou
 if 'viagem_cadastrada' not in st.session_state:
     st.session_state.viagem_cadastrada = None
 
-# Estado para edição
 if 'editando_viagem' not in st.session_state:
     st.session_state.editando_viagem = None
 
-# Estado para email
 if 'email_status' not in st.session_state:
     st.session_state.email_status = None
 
-# Estado para feedback
 if 'feedback_enviado' not in st.session_state:
     st.session_state.feedback_enviado = False
 
@@ -1236,9 +1230,17 @@ with st.sidebar:
         st.metric("Total de Viagens", total_viagens)
         st.metric("Custo Total", formatar_moeda(total_geral))
         
-        # Informação do banco de dados
         st.markdown("---")
         st.caption(f"💾 Dados salvos no banco SQLite")
+    
+    st.markdown("---")
+    if st.button("🔄 Forçar Sincronização", use_container_width=True):
+        with st.spinner("🔄 Sincronizando com GitHub..."):
+            result = sincronizar_github("manual")
+            if result['success']:
+                st.success(f"✅ {result.get('message', 'Sincronizado!')}")
+            else:
+                st.error(f"❌ Erro: {result.get('error', '')}")
 
 # Abas
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
@@ -1247,8 +1249,10 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📊 Análise e Relatórios", 
     "📄 Meus Extratos", 
     "📝 Feedback",
-    "🔄 Sincronização"  # Nova aba
+    "🔄 Sincronização"
 ])
+
+# ==================== TAB 1: CADASTRO ====================
 
 with tab1:
     st.markdown("### 📝 Cadastrar Nova Viagem")
@@ -1319,9 +1323,7 @@ with tab1:
             placeholder="Selecione as atividades que serão realizadas durante a viagem"
         )
     
-    # Botão de cadastro
     if st.button("✅ Cadastrar Viagem", type="primary", use_container_width=True, key="btn_cadastrar"):
-        # Limpar status anterior do email ao iniciar um novo cadastro
         if 'email_status' in st.session_state:
             st.session_state.email_status = None
         
@@ -1360,50 +1362,45 @@ with tab1:
                 'data_cadastro': datetime.now().strftime('%d/%m/%Y %H:%M')
             }
             
-            # Salvar no banco de dados
             try:
                 viagem_id = db.salvar_viagem(viagem)
                 viagem['id'] = viagem_id
                 
-                # Atualizar sessão
                 st.session_state.viagens = db.carregar_viagens()
                 st.session_state.viagem_cadastrada = viagem
                 
-                # Enviar email
                 with st.spinner("📧 Enviando email de confirmação..."):
                     email_enviado, destinatarios_enviados = enviar_email_confirmacao(viagem, orcamento, email_usuario)
                 
-                # Armazenar status do email na sessão
+                # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                with st.spinner("🔄 Sincronizando com GitHub..."):
+                    github_result = sincronizar_github("cadastro", viagem)
+                # ===== FIM SINCRONIZAÇÃO =====
+                
                 st.session_state.email_status = {
                     'enviado': email_enviado,
                     'destinatarios': destinatarios_enviados,
                     'email_usuario': email_usuario
                 }
                 
-                st.success("✅ Viagem cadastrada com sucesso!")
+                # Mostrar resultado do GitHub
+                if github_result['success']:
+                    st.success(f"✅ Viagem cadastrada e sincronizada com GitHub! {github_result.get('message', '')}")
+                else:
+                    st.warning(f"⚠️ Viagem cadastrada, mas erro na sincronização: {github_result.get('error', '')}")
                 
             except Exception as e:
-                st.error(f"❌ Erro ao salvar no banco de dados: {str(e)}")
+                st.error(f"❌ Erro ao salvar: {str(e)}")
     
-    # Exibir mensagem de confirmação do email (se existir)
+    # Exibir mensagem de confirmação do email
     if 'email_status' in st.session_state and st.session_state.email_status is not None:
         status = st.session_state.email_status
-        
         st.markdown("---")
         
         if status['enviado']:
-            # Mensagem de sucesso com detalhes
             destinatarios_str = ', '.join(status['destinatarios'])
-            
-            # Container destacado para a mensagem
             st.markdown(f"""
-            <div style="
-                background-color: #d4edda;
-                border-left: 6px solid #28a745;
-                padding: 0px;
-                border-radius: 8px;
-                margin: 0px 0;
-            ">
+            <div style="background-color: #d4edda; border-left: 6px solid #28a745; padding: 0px; border-radius: 8px; margin: 0px 0;">
                 <p style="color: #155724; margin: 0px 0 0 0; font-size: 16px;">
                     📧 O email de confirmação foi enviado para o(s) endereço(s):
                     <strong>{destinatarios_str}</strong>
@@ -1414,25 +1411,14 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
         else:
-            # Mensagem de aviso se o email não foi enviado
             st.markdown("""
-            <div style="
-                background-color: #fff3cd;
-                border-left: 6px solid #ffc107;
-                padding: 20px;
-                border-radius: 8px;
-                margin: 10px 0;
-            ">
+            <div style="background-color: #fff3cd; border-left: 6px solid #ffc107; padding: 20px; border-radius: 8px; margin: 10px 0;">
                 <h3 style="color: #856404; margin: 0;">⚠️ ATENÇÃO</h3>
                 <p style="color: #856404; margin: 10px 0 0 0; font-size: 16px;">
                     Viagem cadastrada com sucesso, mas houve um problema ao enviar o email de confirmação.
                 </p>
-                <p style="color: #856404; margin: 5px 0 0 0; font-size: 14px;">
-                    Verifique as configurações de email no arquivo .env
-                </p>
             </div>
             """, unsafe_allow_html=True)
-        
         st.markdown("---")
     
     # Exibir orçamento da última viagem cadastrada
@@ -1468,13 +1454,10 @@ with tab1:
             st.markdown("---")
             st.markdown(f"**💵 TOTAL GERAL: {formatar_moeda(orcamento['total_geral'])}**")
         
-        # Botões para download - PDF e HTML lado a lado
         st.markdown("### 📄 Baixar Extrato")
-        
         col1, col2 = st.columns(2)
         
         with col1:
-            # Botão para baixar PDF
             if st.button("📄 Baixar Extrato em PDF", use_container_width=True, key="btn_pdf_cadastro"):
                 pdf_buffer = gerar_pdf_extrato(viagem, orcamento)
                 st.download_button(
@@ -1487,11 +1470,9 @@ with tab1:
                 )
         
         with col2:
-            # Função para formatar moeda no HTML
             def formatar_moeda_html(valor):
                 return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
             
-            # Botão para baixar HTML
             html_content = criar_corpo_email(viagem, orcamento, formatar_moeda_html)
             html_bytes = html_content.encode('utf-8')
             b64_html = base64.b64encode(html_bytes).decode()
@@ -1500,19 +1481,7 @@ with tab1:
             <div style="display: flex; justify-content: center; width: 100%;">
                 <a href="data:text/html;base64,{b64_html}" 
                    download="extrato_{viagem['comunidade'][0] if isinstance(viagem['comunidade'], list) else viagem['comunidade']}_{datetime.now().strftime('%Y%m%d_%H%M')}.html"
-                   style="
-                       background-color: #f0f2f6;
-                       color: #262730;
-                       padding: 06px 20px;
-                       text-decoration: none;
-                       border-radius: 5px;
-                       border: 1px solid #d1d5db;
-                       text-align: center;
-                       font-weight: 500;
-                       display: inline-block;
-                       width: 100%;
-                       transition: all 0.2s;
-                   "
+                   style="background-color: #f0f2f6; color: #262730; padding: 06px 20px; text-decoration: none; border-radius: 5px; border: 1px solid #d1d5db; text-align: center; font-weight: 500; display: inline-block; width: 100%; transition: all 0.2s;"
                    onmouseover="this.style.backgroundColor='#e0e2e6'"
                    onmouseout="this.style.backgroundColor='#f0f2f6'">
                     📧 Baixar Extrato em HTML
@@ -1520,16 +1489,16 @@ with tab1:
             </div>
             """, unsafe_allow_html=True)
 
+# ==================== TAB 2: LISTA DE VIAGENS ====================
+
 with tab2:
     st.markdown("### 📋 Viagens Cadastradas")
     
-    # Recarregar do banco de dados para garantir dados atualizados
     st.session_state.viagens = db.carregar_viagens()
     
     if not st.session_state.viagens:
         st.info("ℹ️ Nenhuma viagem cadastrada.")
     else:
-        # Verificar se está em modo de edição
         if st.session_state.editando_viagem is not None:
             viagem_edit = st.session_state.editando_viagem
             st.markdown("### ✏️ Editando Viagem")
@@ -1550,7 +1519,6 @@ with tab2:
                     default=viagem_edit['municipio'],
                     key="edit_municipio"
                 )
-                
                 data_inicio_edit = st.date_input(
                     "📅 Data de Início",
                     value=datetime.strptime(viagem_edit['data_inicio'], '%d/%m/%Y'),
@@ -1578,20 +1546,17 @@ with tab2:
                     step=1,
                     key="edit_servidores"
                 )
-                
                 cadastrante_edit = st.text_input(
                     "👤 Cadastrado por",
                     value=viagem_edit['cadastrante'],
                     key="edit_cadastrante"
                 )
-                
                 email_usuario_edit = st.selectbox(
                     "📧 Seu Email",
                     constantes.EMAILS,
                     index=constantes.EMAILS.index(viagem_edit['email_usuario']) if viagem_edit['email_usuario'] in constantes.EMAILS else 0,
                     key="edit_email"
                 )
-                
                 distancia_rodoviaria_edit = st.number_input(
                     "🚗 Distância Rodoviária (km)",
                     min_value=0.0,
@@ -1600,7 +1565,6 @@ with tab2:
                     step=10.0,
                     key="edit_dist_rod"
                 )
-                
                 distancia_local_edit = st.number_input(
                     "🚙 Distância Local (km)",
                     min_value=0.0,
@@ -1609,10 +1573,8 @@ with tab2:
                     step=5.0,
                     key="edit_dist_local"
                 )
-                
                 distancia_total_edit = distancia_rodoviaria_edit + distancia_local_edit
                 st.caption(f"📏 Distância total: {distancia_total_edit:.1f} km")
-                
                 tipo_atividade_edit = st.multiselect(
                     "📋 Tipo de Atividade",
                     constantes.TIPO_DE_ATIVIDADE,
@@ -1623,7 +1585,6 @@ with tab2:
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
-                    # Recalcular orçamento
                     orcamento_edit = calcular_orcamento(
                         quantidade_servidores_edit,
                         data_inicio_edit,
@@ -1651,27 +1612,34 @@ with tab2:
                     }
                     
                     try:
-                        # Atualizar no banco
                         db.atualizar_viagem(viagem_edit['id'], viagem_atualizada)
                         st.session_state.viagens = db.carregar_viagens()
                         
-                        # Enviar email de alteração
                         with st.spinner("📧 Enviando email de confirmação de alteração..."):
                             email_para_envio = email_usuario_edit if email_usuario_edit else viagem_edit.get('email_usuario', '')
                             email_enviado, destinatarios = enviar_email_alteracao(
                                 viagem_atualizada, 
                                 orcamento_edit, 
-                                email_para_envio
+                                email_para_envio,
+                                viagem_edit
                             )
                         
-                        # Limpar estado de edição
+                        # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                        with st.spinner("🔄 Sincronizando com GitHub..."):
+                            github_result = sincronizar_github("edicao", viagem_atualizada)
+                        # ===== FIM SINCRONIZAÇÃO =====
+                        
                         st.session_state.editando_viagem = None
                         
-                        # Mostrar mensagem de sucesso
                         if email_enviado:
-                            st.success(f"✅ Viagem atualizada com sucesso! Email de confirmação enviado para: {', '.join(destinatarios)}")
+                            st.success(f"✅ Viagem atualizada! Email enviado para: {', '.join(destinatarios)}")
                         else:
-                            st.success("✅ Viagem atualizada com sucesso! (Email de confirmação não enviado)")
+                            st.success("✅ Viagem atualizada com sucesso!")
+                        
+                        if github_result['success']:
+                            st.success(f"✅ Sincronizado com GitHub! {github_result.get('message', '')}")
+                        else:
+                            st.warning(f"⚠️ Erro na sincronização: {github_result.get('error', '')}")
                         
                         st.rerun()
                         
@@ -1688,7 +1656,6 @@ with tab2:
         # Lista de viagens
         dados = []
         for viagem in st.session_state.viagens:
-            # Converter listas para string
             comunidades = viagem.get('comunidade', '')
             if isinstance(comunidades, list):
                 comunidades = ", ".join(comunidades)
@@ -1719,17 +1686,15 @@ with tab2:
         
         df = pd.DataFrame(dados)
         if 'ID' in df.columns:
-                    df = df.drop(columns=['ID'])
-                    df.index = df.index + 1
+            df = df.drop(columns=['ID'])
+            df.index = df.index + 1
         df['Total Diárias'] = df['Total Diárias'].apply(lambda x: formatar_moeda(x))
         df['Total Combustível'] = df['Total Combustível'].apply(lambda x: formatar_moeda(x))
         df['Total Geral'] = df['Total Geral'].apply(lambda x: formatar_moeda(x))
         
         st.dataframe(df, use_container_width=True, height=400)
         
-        # Botões de ação - USANDO BOTÕES DIRETOS SEM CHECKBOX
         st.markdown("### 🔧 Gerenciar Viagens")
-        
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -1742,7 +1707,6 @@ with tab2:
                     key="select_editar",
                     label_visibility="collapsed"
                 )
-                
                 if st.button("✏️ Editar Viagem", use_container_width=True, key="btn_editar"):
                     viagem_para_editar = next((v for v in st.session_state.viagens if v['id'] == id_para_editar), None)
                     if viagem_para_editar:
@@ -1760,7 +1724,6 @@ with tab2:
                     label_visibility="collapsed"
                 )
                 
-                # Estado de confirmação para exclusão
                 if 'confirmar_exclusao' not in st.session_state:
                     st.session_state.confirmar_exclusao = False
                 
@@ -1769,7 +1732,6 @@ with tab2:
                     st.session_state.id_para_excluir = id_para_excluir
                     st.rerun()
                 
-                # Mostrar confirmação apenas se confirmar_exclusao for True
                 if st.session_state.confirmar_exclusao and st.session_state.id_para_excluir == id_para_excluir:
                     st.warning(f"⚠️ Tem certeza que deseja excluir a viagem ID {id_para_excluir}?")
                     col_confirm, col_cancel = st.columns(2)
@@ -1780,7 +1742,17 @@ with tab2:
                                 st.session_state.viagens = db.carregar_viagens()
                                 st.session_state.confirmar_exclusao = False
                                 st.session_state.id_para_excluir = None
-                                st.success(f"✅ Viagem ID {id_para_excluir} excluída com sucesso!")
+                                
+                                # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                                with st.spinner("🔄 Sincronizando com GitHub..."):
+                                    github_result = sincronizar_github("exclusao")
+                                # ===== FIM SINCRONIZAÇÃO =====
+                                
+                                if github_result['success']:
+                                    st.success(f"✅ Viagem excluída e sincronizada com GitHub! {github_result.get('message', '')}")
+                                else:
+                                    st.warning(f"⚠️ Viagem excluída, mas erro na sincronização: {github_result.get('error', '')}")
+                                
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"❌ Erro ao excluir: {str(e)}")
@@ -1793,7 +1765,6 @@ with tab2:
         with col3:
             st.markdown("**🗑️ Limpar Todas**")
             if not st.session_state.editando_viagem:
-                # Estado de confirmação para limpar todas
                 if 'confirmar_limpar_todas' not in st.session_state:
                     st.session_state.confirmar_limpar_todas = False
                 
@@ -1801,7 +1772,6 @@ with tab2:
                     st.session_state.confirmar_limpar_todas = True
                     st.rerun()
                 
-                # Mostrar confirmação apenas se confirmar_limpar_todas for True
                 if st.session_state.confirmar_limpar_todas:
                     st.warning("⚠️ ATENÇÃO: Isso irá excluir TODAS as viagens cadastradas!")
                     col_confirm, col_cancel = st.columns(2)
@@ -1812,6 +1782,12 @@ with tab2:
                                 st.session_state.viagens = []
                                 st.session_state.viagem_cadastrada = None
                                 st.session_state.confirmar_limpar_todas = False
+                                
+                                # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                                with st.spinner("🔄 Sincronizando com GitHub..."):
+                                    github_result = sincronizar_github("exclusao")
+                                # ===== FIM SINCRONIZAÇÃO =====
+                                
                                 st.success("✅ Todas as viagens foram excluídas com sucesso!")
                                 st.rerun()
                             except Exception as e:
@@ -1821,17 +1797,17 @@ with tab2:
                             st.session_state.confirmar_limpar_todas = False
                             st.rerun()
         
-        # Botão para baixar CSV
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col2:
             df_export = pd.DataFrame(dados)
             st.markdown(get_download_link(df_export, "viagens_quilombola.csv"), unsafe_allow_html=True)
 
+# ==================== TAB 3: ANÁLISE ====================
+
 with tab3:
     st.markdown("### 📊 Análise e Relatórios")
     
-    # Recarregar do banco de dados
     st.session_state.viagens = db.carregar_viagens()
     
     if not st.session_state.viagens:
@@ -1839,7 +1815,6 @@ with tab3:
     else:
         dados_analise = []
         for viagem in st.session_state.viagens:
-            # Converter listas para string para análise
             comunidade = viagem.get('comunidade', '')
             if isinstance(comunidade, list):
                 comunidade = ", ".join(comunidade)
@@ -1869,7 +1844,6 @@ with tab3:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Agrupar por Comunidade (agora é string)
                 custo_comunidade = df_analise.groupby('Comunidade')['Total Geral'].sum().reset_index()
                 fig = px.bar(
                     custo_comunidade,
@@ -1883,7 +1857,6 @@ with tab3:
                 st.plotly_chart(fig, use_container_width=True)
             
             with col2:
-                # Agrupar por Atividade
                 custo_atividade = df_analise.groupby('Tipo Atividade')['Total Geral'].sum().reset_index()
                 fig = px.pie(
                     custo_atividade,
@@ -1924,17 +1897,17 @@ with tab3:
             
             st.dataframe(cadastrante_analise, use_container_width=True)
 
+# ==================== TAB 4: MEUS EXTRATOS ====================
+
 with tab4:
     st.markdown("### 📄 Meus Extratos")
     st.markdown("Consulte aqui os extratos das suas viagens cadastradas.")
     
-    # Recarregar do banco de dados
     st.session_state.viagens = db.carregar_viagens()
     
     if not st.session_state.viagens:
         st.info("ℹ️ Nenhuma viagem cadastrada para consultar extratos.")
     else:
-        # Filtro por cadastrante
         cadastrantes = list(set([v.get('cadastrante', '') for v in st.session_state.viagens if v.get('cadastrante', '')]))
         cadastrantes.insert(0, "Todos")
         
@@ -1944,7 +1917,6 @@ with tab4:
             key="filtro_cadastrante_extratos"
         )
         
-        # Filtrar viagens
         if filtro_cadastrante == "Todos":
             viagens_filtradas = st.session_state.viagens
         else:
@@ -1953,7 +1925,6 @@ with tab4:
         if not viagens_filtradas:
             st.info("ℹ️ Nenhuma viagem encontrada para este cadastrante.")
         else:
-            # Selecionar viagem
             opcoes = []
             for i, v in enumerate(viagens_filtradas):
                 comunidade = v.get('comunidade', '')
@@ -1974,18 +1945,15 @@ with tab4:
                 viagem = viagens_filtradas[viagem_selecionada_idx]
                 orcamento = viagem.get('orcamento', {})
                 
-                # Mostrar extrato
                 st.markdown("---")
                 st.markdown("### 📋 Extrato da Viagem")
                 
                 def formatar_moeda_html(valor):
                     return f"R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
                 
-                # Botões para download
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    # Botão para baixar PDF
                     if st.button("📄 Baixar Extrato em PDF", use_container_width=True, key="btn_pdf_extrato"):
                         pdf_buffer = gerar_pdf_extrato(viagem, orcamento)
                         st.download_button(
@@ -1998,25 +1966,22 @@ with tab4:
                         )
                 
                 with col2:
-                    # Botão para baixar como HTML
                     html_content = criar_corpo_email(viagem, orcamento, formatar_moeda_html)
                     html_bytes = html_content.encode('utf-8')
                     b64_html = base64.b64encode(html_bytes).decode()
                     href_html = f'<a href="data:text/html;base64,{b64_html}" download="extrato_{viagem.get("comunidade", "")}_{datetime.now().strftime("%Y%m%d_%H%M")}.html">📧 Baixar Extrato em HTML</a>'
                     st.markdown(href_html, unsafe_allow_html=True)
 
+# ==================== TAB 5: FEEDBACK ====================
+
 with tab5:
     st.markdown("### 📝 Formulário de Feedback")
-    #st.markdown("Sua opinião é muito importante para melhorarmos o sistema!")
-    #st.markdown("**🔒 Este formulário é totalmente anônimo.**")
     st.markdown("---")
     
-    # Inicializar estado do feedback
     if 'feedback_enviado' not in st.session_state:
         st.session_state.feedback_enviado = False
     
     if not st.session_state.feedback_enviado:
-        # Seção 1: Usabilidade
         with st.expander("🎯 Facilidade de Uso", expanded=True):
             st.markdown("**1.1** Como você avalia a facilidade de uso do sistema?")
             facilidade_uso = st.radio(
@@ -2045,7 +2010,6 @@ with tab5:
                 label_visibility="collapsed"
             )
         
-        # Seção 2: Funcionalidades
         with st.expander("⚙️ Funcionalidades"):
             st.markdown("**2.1** Quais funcionalidades você mais utiliza no sistema?")
             funcionalidades_usa = st.multiselect(
@@ -2077,7 +2041,6 @@ with tab5:
                 key="fb_falta"
             )
         
-        # Seção 3: Desempenho
         with st.expander("🚀 Desempenho e Eficiência"):
             st.markdown("**3.1** Como você avalia a velocidade de resposta do sistema?")
             velocidade_sistema = st.radio(
@@ -2106,7 +2069,6 @@ with tab5:
                 label_visibility="collapsed"
             )
         
-        # Seção 4: Relatórios
         with st.expander("📊 Relatórios e Extratos"):
             st.markdown("**4.1** Como você avalia a qualidade dos extratos gerados (PDF/HTML)?")
             qualidade_extratos = st.radio(
@@ -2134,7 +2096,6 @@ with tab5:
                 height=80
             )
         
-        # Seção 5: Email
         with st.expander("📧 Email de Confirmação"):
             st.markdown("**5.1** Você recebe o email de confirmação após cadastrar uma viagem?")
             recebe_email = st.radio(
@@ -2162,7 +2123,6 @@ with tab5:
                 height=80
             )
         
-        # Seção 6: Banco de Dados
         with st.expander("💾 Banco de Dados e Persistência"):
             st.markdown("**6.1** Você considera importante que os dados sejam salvos permanentemente no banco de dados?")
             importancia_banco = st.radio(
@@ -2182,7 +2142,6 @@ with tab5:
                 label_visibility="collapsed"
             )
         
-        # Seção 7: Satisfação Geral
         with st.expander("⭐ Satisfação Geral"):
             st.markdown("**7.1** Em uma escala de 1 a 10, qual sua nota geral para o sistema?")
             nota_geral = st.slider(
@@ -2204,7 +2163,6 @@ with tab5:
                 label_visibility="collapsed"
             )
         
-        # Seção 8: Sugestões
         with st.expander("💡 Sugestões de Melhoria"):
             st.markdown("**8.1** Quais melhorias você sugere para o sistema?")
             sugestoes_melhoria = st.text_area(
@@ -2230,7 +2188,6 @@ with tab5:
                 height=80
             )
         
-        # Seção 9: Uso Futuro
         with st.expander("🔮 Uso Futuro"):
             st.markdown("**9.1** Você continuaria usando este sistema no futuro?")
             continuaria_usando = st.radio(
@@ -2249,7 +2206,6 @@ with tab5:
                 height=80
             )
         
-        # Comentários adicionais
         st.markdown("---")
         st.markdown("### 💬 Comentários Adicionais")
         comentarios_adicionais = st.text_area(
@@ -2259,11 +2215,9 @@ with tab5:
             height=100
         )
         
-        # Botão de envio
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             if st.button("📤 Enviar Feedback", type="primary", use_container_width=True):
-                # Preparar dados (sem identificação)
                 feedback_data = {
                     'data_resposta': datetime.now().strftime('%d/%m/%Y'),
                     'facilidade_uso': facilidade_uso,
@@ -2297,22 +2251,25 @@ with tab5:
                 try:
                     db.salvar_feedback(feedback_data)
                     st.session_state.feedback_enviado = True
+                    
+                    # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                    with st.spinner("🔄 Sincronizando com GitHub..."):
+                        github_result = sincronizar_github("feedback")
+                    # ===== FIM SINCRONIZAÇÃO =====
+                    
+                    if github_result['success']:
+                        st.success(f"✅ Feedback enviado e sincronizado com GitHub! {github_result.get('message', '')}")
+                    else:
+                        st.warning(f"⚠️ Feedback enviado, mas erro na sincronização: {github_result.get('error', '')}")
+                    
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Erro ao enviar feedback: {str(e)}")
     
     else:
-        # Mensagem de agradecimento após o envio
         st.markdown("---")
         st.markdown("""
-        <div style="
-            background-color: #d4edda;
-            border-left: 6px solid #28a745;
-            padding: 30px;
-            border-radius: 8px;
-            text-align: center;
-            margin: 20px 0;
-        ">
+        <div style="background-color: #d4edda; border-left: 6px solid #28a745; padding: 30px; border-radius: 8px; text-align: center; margin: 20px 0;">
             <h1 style="color: #155724; margin: 0;">🙏 MUITO OBRIGADO!</h1>
             <p style="color: #155724; font-size: 18px; margin: 15px 0 0 0;">
                 Seu feedback foi enviado com sucesso e é muito importante para nós!
@@ -2326,23 +2283,19 @@ with tab5:
         </div>
         """, unsafe_allow_html=True)
         
-        # Botão para enviar novo feedback
         if st.button("📝 Enviar novo feedback", use_container_width=True):
             st.session_state.feedback_enviado = False
             st.rerun()
         
-        # Mostrar histórico de feedbacks (apenas para administradores - opcional)
         with st.expander("📊 Ver histórico de feedbacks (Administradores)"):
             feedbacks = db.carregar_feedbacks()
             if feedbacks:
                 df_feedback = pd.DataFrame(feedbacks)
-                # Selecionar colunas principais para exibir
                 colunas_exibir = ['id', 'data_resposta', 'nota_geral', 'data_cadastro']
                 df_feedback = df_feedback[colunas_exibir]
                 df_feedback.columns = ['ID', 'Data Resposta', 'Nota', 'Data Cadastro']
                 st.dataframe(df_feedback, use_container_width=True)
                 
-                # Estatísticas rápidas
                 st.markdown("### 📊 Estatísticas Rápidas")
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -2360,16 +2313,12 @@ with tab5:
 
 # ==================== TAB 6: SINCRONIZAÇÃO ====================
 
-# ==================== TAB 6: SINCRONIZAÇÃO ====================
-
 with tab6:
     st.markdown("### 🔄 Sincronização com GitHub")
     st.markdown("Gerencie a sincronização dos dados com o repositório GitHub.")
     
-    # Verificar configuração
     sync = GitHubSync()
     
-    # Status da sincronização
     st.markdown("#### 📊 Status do Repositório")
     
     col1, col2 = st.columns(2)
@@ -2391,7 +2340,6 @@ with tab6:
     
     st.markdown("---")
     
-    # Testar Configuração
     st.markdown("#### 🔍 Testar Configuração")
     if st.button("🔍 Testar Configuração do GitHub", use_container_width=True):
         with st.spinner("Testando configuração..."):
@@ -2402,10 +2350,9 @@ with tab6:
                     'modo_teste': sync.modo_teste,
                     'repo_path': sync.repo_path,
                     'token_configurado': bool(sync.token),
-                    'remote_configurado': bool(sync.remote_url)
+                    'repo_carregado': bool(sync.repo)
                 })
                 
-                # Fazer um commit de teste se possível
                 if sync.enabled and sync.repo and sync.token:
                     try:
                         test_file = os.path.join(sync.repo_path, 'teste_automacao.txt')
@@ -2424,7 +2371,6 @@ with tab6:
     
     st.markdown("---")
     
-    # Ações
     col1, col2 = st.columns(2)
     
     with col1:
@@ -2449,7 +2395,6 @@ with tab6:
     
     st.markdown("---")
     
-    # Configurações
     with st.expander("⚙️ Configurações do GitHub"):
         st.markdown("""
         **Variáveis de ambiente necessárias no .env:**
@@ -2457,10 +2402,10 @@ with tab6:
         ```env
         # Configurações do GitHub
         GITHUB_ENABLED=True
-        GITHUB_MODO_TESTE=False  # True = testar sem push, False = push real
-        GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx  # Seu token aqui
+        GITHUB_MODO_TESTE=False
+        GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxxxxx
         GITHUB_REPO_PATH=/home/michael/Quilombo-Viagens-master
         GITHUB_BRANCH=main
-        GITHUB_USER_NAME=Michael Cardoso
-        GITHUB_USER_EMAIL=michael@email.com
-        """)
+        GITHUB_USER_NAME=michaeljmcardoso
+        GITHUB_USER_EMAIL=michaelmiranda38@yahoo.com.br
+    """)
