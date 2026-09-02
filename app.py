@@ -1,3 +1,4 @@
+import shutil
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
@@ -1519,19 +1520,30 @@ with tab2:
                     default=viagem_edit['municipio'],
                     key="edit_municipio"
                 )
+                
+                # ===== DATA DE INÍCIO - USAR SESSION STATE =====
+                if 'edit_data_inicio_temp' not in st.session_state:
+                    st.session_state.edit_data_inicio_temp = datetime.strptime(viagem_edit['data_inicio'], '%d/%m/%Y')
+                
                 data_inicio_edit = st.date_input(
                     "📅 Data de Início",
-                    value=datetime.strptime(viagem_edit['data_inicio'], '%d/%m/%Y'),
+                    value=st.session_state.edit_data_inicio_temp,
                     key="edit_data_inicio"
                 )
+                # Atualizar o session state com a nova data
+                st.session_state.edit_data_inicio_temp = data_inicio_edit
+                
+                # ===== DATA DE TÉRMINO - SEM min_value =====
                 data_fim_edit = st.date_input(
                     "📅 Data de Término",
                     value=datetime.strptime(viagem_edit['data_fim'], '%d/%m/%Y'),
-                    min_value=data_inicio_edit,
                     key="edit_data_fim"
                 )
                 
-                if data_fim_edit >= data_inicio_edit:
+                # Validar as datas e mostrar aviso
+                if data_fim_edit < data_inicio_edit:
+                    st.error("⚠️ A data de término não pode ser anterior à data de início!")
+                else:
                     dias_viagem_edit = (data_fim_edit - data_inicio_edit).days + 1
                     diarias_calculadas_edit = calcular_diarias(data_inicio_edit, data_fim_edit)
                     st.info(f"📆 Duração: {dias_viagem_edit} dia(s)")
@@ -1585,13 +1597,18 @@ with tab2:
             col1, col2, col3 = st.columns(3)
             with col1:
                 if st.button("💾 Salvar Alterações", type="primary", use_container_width=True):
-                    orcamento_edit = calcular_orcamento(
-                        quantidade_servidores_edit,
-                        data_inicio_edit,
-                        data_fim_edit,
-                        distancia_rodoviaria_edit,
-                        distancia_local_edit
-                    )
+                    # Validar datas ANTES de prosseguir
+                    if data_fim_edit < data_inicio_edit:
+                        st.error("❌ A data de término não pode ser anterior à data de início! Corrija e tente novamente.")
+                    else:
+                        # Recalcular orçamento e continuar...
+                        orcamento_edit = calcular_orcamento(
+                            quantidade_servidores_edit,
+                            data_inicio_edit,
+                            data_fim_edit,
+                            distancia_rodoviaria_edit,
+                            distancia_local_edit
+                        )
                     
                     viagem_atualizada = {
                         'comunidade': comunidade_edit,
@@ -1648,6 +1665,9 @@ with tab2:
             
             with col2:
                 if st.button("❌ Cancelar Edição", use_container_width=True):
+                    # Limpar dados temporários
+                    if 'edit_data_inicio_temp' in st.session_state:
+                        del st.session_state.edit_data_inicio_temp
                     st.session_state.editando_viagem = None
                     st.rerun()
             
