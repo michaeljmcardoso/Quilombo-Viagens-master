@@ -123,6 +123,7 @@ class Database:
                 data_inicio TEXT NOT NULL,
                 data_fim TEXT NOT NULL,
                 quantidade_servidores INTEGER NOT NULL,
+                servidores_envolvidos TEXT DEFAULT '',
                 diarias_por_servidor REAL NOT NULL,
                 dias_totais INTEGER NOT NULL,
                 distancia_rodoviaria REAL NOT NULL,
@@ -189,6 +190,20 @@ class Database:
         # Verificar colunas existentes na tabela viagens
         cursor.execute("PRAGMA table_info(viagens)")
         colunas_viagens = [col[1] for col in cursor.fetchall()]
+        
+        # Adicionar coluna servidores_envolvidos se não existir
+        if 'servidores_envolvidos' not in colunas_viagens:
+            try:
+                cursor.execute("ALTER TABLE viagens ADD COLUMN servidores_envolvidos TEXT DEFAULT ''")
+                cursor.execute("""
+                    UPDATE viagens 
+                    SET servidores_envolvidos = 'Não informado' 
+                    WHERE servidores_envolvidos IS NULL OR servidores_envolvidos = ''
+                """)
+                conn.commit()
+                print("✅ Coluna servidores_envolvidos adicionada e preenchida")
+            except Exception as e:
+                print(f"⚠️ Erro ao adicionar coluna servidores_envolvidos: {str(e)}")
         
         # Adicionar colunas faltantes na tabela viagens
         if 'orcamento_combustivel_local' not in colunas_viagens:
@@ -313,18 +328,20 @@ class Database:
         cursor.execute('''
             INSERT INTO viagens (
                 comunidade, municipio, data_inicio, data_fim,
-                quantidade_servidores, diarias_por_servidor, dias_totais,
+                quantidade_servidores, servidores_envolvidos,
+                diarias_por_servidor, dias_totais,
                 distancia_rodoviaria, distancia_local, distancia_total,
                 tipo_atividade, cadastrante, email_usuario, data_cadastro,
                 orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
                 orcamento_diarias_servidor, orcamento_litros_rodoviario,
                 orcamento_litros_local, orcamento_total_litros,
                 orcamento_combustivel_rodoviario, orcamento_combustivel_local
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             comunidade_json, municipio_json,
             viagem_data['data_inicio'], viagem_data['data_fim'],
             viagem_data['quantidade_servidores'],
+            viagem_data.get('servidores_envolvidos', ''),
             viagem_data['diarias_por_servidor'],
             viagem_data['dias_totais'],
             viagem_data['distancia_rodoviaria'],
@@ -370,6 +387,7 @@ class Database:
                 data_inicio = ?,
                 data_fim = ?,
                 quantidade_servidores = ?,
+                servidores_envolvidos = ?,
                 diarias_por_servidor = ?,
                 dias_totais = ?,
                 distancia_rodoviaria = ?,
@@ -393,6 +411,7 @@ class Database:
             comunidade_json, municipio_json,
             viagem_data['data_inicio'], viagem_data['data_fim'],
             viagem_data['quantidade_servidores'],
+            viagem_data.get('servidores_envolvidos', ''),
             viagem_data['diarias_por_servidor'],
             viagem_data['dias_totais'],
             viagem_data['distancia_rodoviaria'],
@@ -426,80 +445,59 @@ class Database:
         cursor.execute("PRAGMA table_info(viagens)")
         colunas = [col[1] for col in cursor.fetchall()]
         
-        # Construir SELECT com as colunas que existem
-        if 'orcamento_combustivel_local' in colunas:
-            cursor.execute('''
-                SELECT 
-                    id, comunidade, municipio, data_inicio, data_fim,
-                    quantidade_servidores, diarias_por_servidor, dias_totais,
-                    distancia_rodoviaria, distancia_local, distancia_total,
-                    tipo_atividade, cadastrante, email_usuario, data_cadastro,
-                    orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
-                    orcamento_diarias_servidor, orcamento_litros_rodoviario,
-                    orcamento_litros_local, orcamento_total_litros,
-                    orcamento_combustivel_rodoviario, orcamento_combustivel_local
-                FROM viagens ORDER BY id DESC
-            ''')
-        else:
-            # Fallback para versão antiga da tabela
-            cursor.execute('''
-                SELECT 
-                    id, comunidade, municipio, data_inicio, data_fim,
-                    quantidade_servidores, diarias_por_servidor, dias_totais,
-                    distancia_rodoviaria, distancia_local, distancia_total,
-                    tipo_atividade, cadastrante, email_usuario, data_cadastro,
-                    orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
-                    orcamento_diarias_servidor, orcamento_litros_rodoviario,
-                    orcamento_litros_local, orcamento_total_litros,
-                    orcamento_combustivel_rodoviario
-                FROM viagens ORDER BY id DESC
-            ''')
+        tem_servidores_envolvidos = 'servidores_envolvidos' in colunas
+        tem_combustivel_local = 'orcamento_combustivel_local' in colunas
         
+        # Construir SELECT dinamicamente
+        select_cols = """
+            id, comunidade, municipio, data_inicio, data_fim,
+            quantidade_servidores,
+        """
+        
+        if tem_servidores_envolvidos:
+            select_cols += " servidores_envolvidos,"
+        else:
+            select_cols += " '' AS servidores_envolvidos,"
+        
+        select_cols += """
+            diarias_por_servidor, dias_totais,
+            distancia_rodoviaria, distancia_local, distancia_total,
+            tipo_atividade, cadastrante, email_usuario, data_cadastro,
+            orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
+            orcamento_diarias_servidor, orcamento_litros_rodoviario,
+            orcamento_litros_local, orcamento_total_litros,
+            orcamento_combustivel_rodoviario
+        """
+        
+        if tem_combustivel_local:
+            select_cols += ", orcamento_combustivel_local"
+        
+        cursor.execute(f"SELECT {select_cols} FROM viagens ORDER BY id DESC")
         rows = cursor.fetchall()
         conn.close()
         
         viagens = []
         for row in rows:
-            # Converter JSON strings de volta para listas
             comunidade = json.loads(row[1])
             municipio = json.loads(row[2])
-            tipo_atividade = json.loads(row[11])
+            tipo_atividade = json.loads(row[12])
             
-            # Verificar quantas colunas foram retornadas
-            if len(row) == 24:  # Versão completa
-                orcamento = {
-                    'total_diarias_valor': row[15],
-                    'total_combustivel': row[16],
-                    'total_geral': row[17],
-                    'total_diarias_servidor': row[18],
-                    'litros_rodoviario': row[19],
-                    'litros_local': row[20],
-                    'total_litros': row[21],
-                    'total_combustivel_rodoviario': row[22],
-                    'total_combustivel_local': row[23],
-                    'dias_totais': row[7],
-                    'diarias_por_servidor': row[6],
-                    'distancia_rodoviaria': row[8],
-                    'distancia_local': row[9],
-                    'distancia_total': row[10]
-                }
-            else:  # Versão antiga (sem orcamento_combustivel_local)
-                orcamento = {
-                    'total_diarias_valor': row[15],
-                    'total_combustivel': row[16],
-                    'total_geral': row[17],
-                    'total_diarias_servidor': row[18],
-                    'litros_rodoviario': row[19],
-                    'litros_local': row[20],
-                    'total_litros': row[21],
-                    'total_combustivel_rodoviario': row[22],
-                    'total_combustivel_local': 0.0,  # Valor padrão para versões antigas
-                    'dias_totais': row[7],
-                    'diarias_por_servidor': row[6],
-                    'distancia_rodoviaria': row[8],
-                    'distancia_local': row[9],
-                    'distancia_total': row[10]
-                }
+            orcamento = {
+                'total_diarias_valor': row[16],
+                'total_combustivel': row[17],
+                'total_geral': row[18],
+                'total_diarias_servidor': row[19],
+                'litros_rodoviario': row[20],
+                'litros_local': row[21],
+                'total_litros': row[22],
+                'total_combustivel_rodoviario': row[23],
+                'total_combustivel_local': row[24] if len(row) > 24 else 0.0,
+                'dias_totais': row[8],
+                'diarias_por_servidor': row[7],
+                'distancia_rodoviaria': row[9],
+                'distancia_local': row[10],
+                'distancia_total': row[11]
+            }
             
             viagem = {
                 'id': row[0],
@@ -508,15 +506,16 @@ class Database:
                 'data_inicio': row[3],
                 'data_fim': row[4],
                 'quantidade_servidores': row[5],
-                'diarias_por_servidor': row[6],
-                'dias_totais': row[7],
-                'distancia_rodoviaria': row[8],
-                'distancia_local': row[9],
-                'distancia_total': row[10],
+                'servidores_envolvidos': row[6] if row[6] else 'Não informado',
+                'diarias_por_servidor': row[7],
+                'dias_totais': row[8],
+                'distancia_rodoviaria': row[9],
+                'distancia_local': row[10],
+                'distancia_total': row[11],
                 'tipo_atividade': tipo_atividade,
-                'cadastrante': row[12],
-                'email_usuario': row[13],
-                'data_cadastro': row[14],
+                'cadastrante': row[13],
+                'email_usuario': row[14],
+                'data_cadastro': row[15],
                 'orcamento': orcamento
             }
             viagens.append(viagem)
@@ -561,6 +560,7 @@ def comparar_alteracoes(viagem_antiga, viagem_nova):
         'data_inicio': '📅 Data Início',
         'data_fim': '📅 Data Fim',
         'quantidade_servidores': '👥 Número de Servidores',
+        'servidores_envolvidos': '👤 Servidores Envolvidos',
         'diarias_por_servidor': '🏨 Diárias por Servidor',
         'dias_totais': '📆 Dias Totais',
         'distancia_rodoviaria': '🛣️ Distância Rodoviária',
@@ -784,8 +784,12 @@ def criar_corpo_email(viagem_data, orcamento, formatar_moeda_html):
                     <span class="info-value">{viagem_data['dias_totais']} dia(s)</span>
                 </div>
                 <div class="info-row">
-                    <span class="info-label">👥 Servidores:</span>
+                    <span class="info-label">👥 Nº de Servidores:</span>
                     <span class="info-value">{viagem_data['quantidade_servidores']}</span>
+                </div>
+                 <div class="info-row">
+                    <span class="info-label">👤 Servidores Envolvidos:</span>
+                    <span class="info-value">{viagem_data.get('servidores_envolvidos', 'Não informado')}</span>
                 </div>
                 <div class="info-row">
                     <span class="info-label">🏨 Diárias por Servidor:</span>
@@ -974,6 +978,10 @@ def criar_corpo_email_alteracao(viagem_data, orcamento, formatar_moeda_html, alt
                     <span class="info-value">{viagem_data['quantidade_servidores']}</span>
                 </div>
                 <div class="info-row">
+                    <span class="info-label">👤 Servidores Envolvidos:</span>
+                    <span class="info-value">{viagem_data.get('servidores_envolvidos', 'Não informado')}</span>
+                </div>
+                <div class="info-row">
                     <span class="info-label">🏨 Diárias por Servidor:</span>
                     <span class="info-value">{viagem_data['diarias_por_servidor']:.1f}</span>
                 </div>
@@ -1083,6 +1091,7 @@ def gerar_pdf_extrato(viagem_data, orcamento):
         ["Período:", f"{viagem_data['data_inicio']} a {viagem_data['data_fim']}"],
         ["Dias:", f"{viagem_data['dias_totais']} dia(s)"],
         ["Servidores:", str(viagem_data['quantidade_servidores'])],
+        ["Servidores Envolvidos:", viagem_data.get('servidores_envolvidos', 'Não informado')],
         ["Diárias por Servidor:", f"{viagem_data['diarias_por_servidor']:.1f}"],
         ["Distância Rodoviária:", f"{viagem_data['distancia_rodoviaria']:.1f} km"],
         ["Distância Local:", f"{viagem_data['distancia_local']:.1f} km"],
@@ -1244,9 +1253,11 @@ with st.sidebar:
                 st.error(f"❌ Erro: {result.get('error', '')}")
 
 # Abas
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab_dia, tab_mes, tab3, tab4, tab5, tab6 = st.tabs([
     "📝 Nova Viagem", 
-    "📋 Lista de Viagens", 
+    "📋 Lista de Viagens",
+    "📅 Viagens do Dia",
+    "📆 Viagens do Mês",
     "📊 Análise e Relatórios", 
     "📄 Meus Extratos", 
     "📝 Feedback",
@@ -1292,6 +1303,7 @@ with tab1:
             step=1
         )
         servidores_envolvidos = st.text_input("👥 Servidores Envolvidos (obrigatório)", placeholder="Digite os nomes dos servidores separados por vírgula")
+        
         cadastrante = st.text_input("👤 Cadastrado por", placeholder="Digite o nome do servidor responsável")
         
         email_usuario = st.selectbox("📧 Seu Email (opcional)", constantes.EMAILS,
@@ -1328,8 +1340,8 @@ with tab1:
         if 'email_status' in st.session_state:
             st.session_state.email_status = None
         
-        if not comunidade or not municipio or not cadastrante:
-            st.error("❌ Preencha todos os campos obrigatórios")
+        if not comunidade or not municipio or not cadastrante or not servidores_envolvidos:
+            st.error("❌ Preencha todos os campos obrigatórios (incluindo Servidores Envolvidos)")
         elif data_fim < data_inicio:
             st.error("❌ Data de término inválida")
         else:
@@ -1351,6 +1363,7 @@ with tab1:
                 'data_inicio': data_inicio.strftime('%d/%m/%Y'),
                 'data_fim': data_fim.strftime('%d/%m/%Y'),
                 'quantidade_servidores': quantidade_servidores,
+                'servidores_envolvidos': servidores_envolvidos,
                 'diarias_por_servidor': orcamento['diarias_por_servidor'],
                 'dias_totais': orcamento['dias_totais'],
                 'distancia_rodoviaria': distancia_rodoviaria,
@@ -1558,6 +1571,11 @@ with tab2:
                     step=1,
                     key="edit_servidores"
                 )
+                servidores_envolvidos_edit = st.text_input(
+                    "👤 Servidores Envolvidos",
+                    value=viagem_edit.get('servidores_envolvidos', ''),
+                    key="edit_servidores_envolvidos"
+                )
                 cadastrante_edit = st.text_input(
                     "👤 Cadastrado por",
                     value=viagem_edit['cadastrante'],
@@ -1616,6 +1634,7 @@ with tab2:
                         'data_inicio': data_inicio_edit.strftime('%d/%m/%Y'),
                         'data_fim': data_fim_edit.strftime('%d/%m/%Y'),
                         'quantidade_servidores': quantidade_servidores_edit,
+                        'servidores_envolvidos': servidores_envolvidos_edit,
                         'diarias_por_servidor': orcamento_edit['diarias_por_servidor'],
                         'dias_totais': orcamento_edit['dias_totais'],
                         'distancia_rodoviaria': distancia_rodoviaria_edit,
@@ -1697,6 +1716,7 @@ with tab2:
                 'Período': f"{viagem.get('data_inicio', '')} a {viagem.get('data_fim', '')}",
                 'Dias': viagem.get('dias_totais', 0),
                 'Servidores': viagem.get('quantidade_servidores', 0),
+                'Servidores Envolvidos': viagem.get('servidores_envolvidos', 'Não informado'),
                 'Atividade': atividades,
                 'Cadastrante': viagem.get('cadastrante', 'Não informado'),
                 'Total Diárias': orcamento.get('total_diarias_valor', 0),
@@ -1816,12 +1836,202 @@ with tab2:
                         if st.button("❌ Cancelar", use_container_width=True, key="cancel_limpar_todas"):
                             st.session_state.confirmar_limpar_todas = False
                             st.rerun()
-        
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col2:
             df_export = pd.DataFrame(dados)
             st.markdown(get_download_link(df_export, "viagens_quilombola.csv"), unsafe_allow_html=True)
+
+# ==================== TAB VIAGENS DO DIA ====================
+with tab_dia:
+    st.markdown("### 📅 Viagens do Dia")
+
+    # Força recarregar do banco
+    st.session_state.viagens = db.carregar_viagens()
+    
+    # Data de referência
+    col_data, col_btn = st.columns([3, 1])
+    with col_data:
+        data_referencia = st.date_input(
+            "📅 Selecione a data",
+            value=datetime.now().date(),
+            key="data_viagens_dia"
+        )
+    data_str = data_referencia.strftime('%d/%m/%Y')
+
+    # Filtrar viagens que ocorrem nesta data
+    viagens_do_dia = []
+    for viagem in st.session_state.viagens:
+        try:
+            inicio = datetime.strptime(viagem['data_inicio'], '%d/%m/%Y').date()
+            fim = datetime.strptime(viagem['data_fim'], '%d/%m/%Y').date()
+            if inicio <= data_referencia <= fim:
+                viagens_do_dia.append(viagem)
+        except:
+            continue
+    st.markdown(f"**Data selecionada:** {data_str}")
+    st.markdown(f"**Total de viagens ativas nesta data:** {len(viagens_do_dia)}")
+
+    if not viagens_do_dia:
+        st.info(f"ℹ️ Nenhuma viagem programada para {data_str}.")
+    else:
+        # Métricas resumidas
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("📋 Viagens", len(viagens_do_dia))
+        with col2:
+            total_servidores = sum(v.get('quantidade_servidores', 0) for v in viagens_do_dia)
+            st.metric("👥 Servidores", total_servidores)
+        with col3:
+            total_km = sum(v.get('distancia_total', 0) for v in viagens_do_dia)
+            st.metric("🛣️ Total KM", f"{total_km:,.1f}".replace(',', '.'))
+        with col4:
+            total_custo = sum(v.get('orcamento', {}).get('total_geral', 0) for v in viagens_do_dia)
+            st.metric("💰 Custo Total", formatar_moeda(total_custo))
+        
+        st.markdown("---")
+        st.markdown("### 📋 Detalhes das Viagens")
+        
+        for viagem in viagens_do_dia:
+            comunidades = viagem.get('comunidade', '')
+            if isinstance(comunidades, list):
+                comunidades = ", ".join(comunidades)
+            
+            municipios = viagem.get('municipio', '')
+            if isinstance(municipios, list):
+                municipios = ", ".join(municipios)
+            
+            atividades = viagem.get('tipo_atividade', '')
+            if isinstance(atividades, list):
+                atividades = ", ".join(atividades)
+            
+            with st.expander(f"🏘️ {comunidades} - {viagem.get('data_inicio', '')} a {viagem.get('data_fim', '')}"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**Município:** {municipios}")
+                    st.markdown(f"**Atividade:** {atividades}")
+                    st.markdown(f"**Cadastrante:** {viagem.get('cadastrante', '')}")
+                with col2:
+                    st.markdown(f"**Servidores:** {viagem.get('quantidade_servidores', 0)}")
+                    st.markdown(f"**Servidores Envolvidos:** {viagem.get('servidores_envolvidos', 'Não informado')}")
+                    st.markdown(f"**Distância Total:** {viagem.get('distancia_total', 0):.1f} km")
+                    st.markdown(f"**Total Geral:** {formatar_moeda(viagem.get('orcamento', {}).get('total_geral', 0))}")
+                    
+# ==================== TAB VIAGENS DO MÊS ====================
+
+with tab_mes:
+    st.markdown("### 📆 Viagens do Mês")
+    
+    # Força recarregar do banco
+    st.session_state.viagens = db.carregar_viagens()
+    
+    # Seleção de mês/ano
+    col1, col2 = st.columns(2)
+    with col1:
+        mes_referencia = st.selectbox(
+            "📅 Mês",
+            options=list(range(1, 13)),
+            index=datetime.now().month - 1,
+            format_func=lambda x: [
+                "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+            ][x - 1],
+            key="mes_viagens"
+        )
+    with col2:
+        ano_referencia = st.selectbox(
+            "📅 Ano",
+            options=list(range(2024, datetime.now().year + 2)),
+            index=datetime.now().year - 2024,
+            key="ano_viagens"
+        )
+    
+    # Filtrar viagens que ocorrem neste mês
+    viagens_do_mes = []
+    for viagem in st.session_state.viagens:
+        try:
+            inicio = datetime.strptime(viagem['data_inicio'], '%d/%m/%Y').date()
+            fim = datetime.strptime(viagem['data_fim'], '%d/%m/%Y').date()
+            
+            # Verificar se há sobreposição com o mês selecionado
+            primeiro_dia = datetime(ano_referencia, mes_referencia, 1).date()
+            if mes_referencia == 12:
+                ultimo_dia = datetime(ano_referencia + 1, 1, 1).date() - timedelta(days=1)
+            else:
+                ultimo_dia = datetime(ano_referencia, mes_referencia + 1, 1).date() - timedelta(days=1)
+            
+            # Sobreposição: início <= último_dia E fim >= primeiro_dia
+            if inicio <= ultimo_dia and fim >= primeiro_dia:
+                viagens_do_mes.append(viagem)
+        except:
+            continue
+    
+    nome_mes = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+    ][mes_referencia - 1]
+    
+    st.markdown(f"**Período:** {nome_mes} / {ano_referencia}")
+    st.markdown(f"**Total de viagens no mês:** {len(viagens_do_mes)}")
+    
+    if not viagens_do_mes:
+        st.info(f"ℹ️ Nenhuma viagem programada para {nome_mes} de {ano_referencia}.")
+    else:
+        # Métricas resumidas
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("📋 Viagens", len(viagens_do_mes))
+        with col2:
+            total_servidores = sum(v.get('quantidade_servidores', 0) for v in viagens_do_mes)
+            st.metric("👥 Servidores", total_servidores)
+        with col3:
+            total_dias = sum(v.get('dias_totais', 0) for v in viagens_do_mes)
+            st.metric("📆 Total Dias", total_dias)
+        with col4:
+            total_km = sum(v.get('distancia_total', 0) for v in viagens_do_mes)
+            st.metric("🛣️ Total KM", f"{total_km:,.1f}".replace(',', '.'))
+        with col5:
+            total_custo = sum(v.get('orcamento', {}).get('total_geral', 0) for v in viagens_do_mes)
+            st.metric("💰 Custo Total", formatar_moeda(total_custo))
+        
+        st.markdown("---")
+        st.markdown("### 📋 Lista de Viagens do Mês")
+        
+        # Tabela resumida
+        dados_mes = []
+        for viagem in viagens_do_mes:
+            comunidades = viagem.get('comunidade', '')
+            if isinstance(comunidades, list):
+                comunidades = ", ".join(comunidades)
+            
+            municipios = viagem.get('municipio', '')
+            if isinstance(municipios, list):
+                municipios = ", ".join(municipios)
+            
+            atividades = viagem.get('tipo_atividade', '')
+            if isinstance(atividades, list):
+                atividades = ", ".join(atividades)
+            
+            dados_mes.append({
+                'Comunidade': comunidades,
+                'Município': municipios,
+                'Período': f"{viagem.get('data_inicio', '')} a {viagem.get('data_fim', '')}",
+                'Dias': viagem.get('dias_totais', 0),
+                'Servidores': viagem.get('quantidade_servidores', 0),
+                'Servidores Envolvidos': viagem.get('servidores_envolvidos', 'Não informado'),
+                'Atividade': atividades,
+                'Cadastrante': viagem.get('cadastrante', ''),
+                'Total Geral': viagem.get('orcamento', {}).get('total_geral', 0)
+            })
+        
+        df_mes = pd.DataFrame(dados_mes)
+        df_mes['Total Geral'] = df_mes['Total Geral'].apply(lambda x: formatar_moeda(x))
+        
+        st.dataframe(df_mes, use_container_width=True, height=400)
+        
+        # Botão de exportação
+        df_export_mes = pd.DataFrame(dados_mes)
+        st.markdown(get_download_link(df_export_mes, f"viagens_{nome_mes}_{ano_referencia}.csv"), unsafe_allow_html=True)        
 
 # ==================== TAB 3: ANÁLISE ====================
 
