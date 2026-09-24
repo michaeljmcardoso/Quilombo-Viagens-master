@@ -1285,13 +1285,13 @@ with tab1:
     
     with col2:
         quantidade_servidores = st.number_input(
-            "👥 Número de Servidores",
+            "👥 Número de Servidores (incluindo motorista)",
             min_value=1,
             max_value=50,
             value=1,
             step=1
         )
-        
+        servidores_envolvidos = st.text_input("👥 Servidores Envolvidos (obrigatório)", placeholder="Digite os nomes dos servidores separados por vírgula")
         cadastrante = st.text_input("👤 Cadastrado por", placeholder="Digite o nome do servidor responsável")
         
         email_usuario = st.selectbox("📧 Seu Email (opcional)", constantes.EMAILS,
@@ -1302,7 +1302,7 @@ with tab1:
             "🚗 Distância Rodoviária (km) - Ida e Volta",
             min_value=0.0,
             max_value=5000.0,
-            value=100.0,
+            value=0.0,
             step=10.0,
             help="Distância da sede ao município de destino"
         )
@@ -1311,7 +1311,7 @@ with tab1:
             "🚙 Distância Local (km)",
             min_value=0.0,
             max_value=5000.0,
-            value=20.0,
+            value=0.0,
             step=5.0,
             help="Deslocamentos internos no município de destino (ex.: visitas às comunidades) durante a viagem"
         )
