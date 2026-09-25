@@ -23,6 +23,7 @@ EMAILS = [
     'francisco.rodrigues@incra.gov.br',
     'geandro.castro@incra.gov.br',
     'jennifer.almeida@incra.gov.br',
+    'josy.silva@incra.gov.br',
     'lidiane.amorim@incra.gov.br',
     'luana.ssantos.colaborador@incra.gov.br',
     'lucas.gariani@incra.gov.br',
