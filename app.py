@@ -1598,7 +1598,7 @@ with tab2:
                 distancia_local_edit = st.number_input(
                     "🚙 Distância Local (km)",
                     min_value=0.0,
-                    max_value=500.0,
+                    max_value=5000.0,
                     value=viagem_edit['distancia_local'],
                     step=5.0,
                     key="edit_dist_local"
