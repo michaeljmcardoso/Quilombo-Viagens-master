@@ -1387,7 +1387,7 @@ with tab1:
                     email_enviado, destinatarios_enviados = enviar_email_confirmacao(viagem, orcamento, email_usuario)
                 
                 # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                with st.spinner("🔄 Sincronizando com GitHub..."):
+                with st.spinner("🔄 Sincronizando com Banco de Dados..."):
                     github_result = sincronizar_github("cadastro", viagem)
                 # ===== FIM SINCRONIZAÇÃO =====
                 
@@ -1399,7 +1399,7 @@ with tab1:
                 
                 # Mostrar resultado do GitHub
                 if github_result['success']:
-                    st.success(f"✅ Viagem cadastrada e sincronizada com GitHub! {github_result.get('message', '')}")
+                    st.success(f"✅ Viagem cadastrada e sincronizada com Banco de Dados! {github_result.get('message', '')}")
                 else:
                     st.warning(f"⚠️ Viagem cadastrada, mas erro na sincronização: {github_result.get('error', '')}")
                 
@@ -1661,7 +1661,7 @@ with tab2:
                             )
                         
                         # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                        with st.spinner("🔄 Sincronizando com GitHub..."):
+                        with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
                             github_result = sincronizar_github("edicao", viagem_atualizada)
                         # ===== FIM SINCRONIZAÇÃO =====
                         
@@ -1673,7 +1673,7 @@ with tab2:
                             st.success("✅ Viagem atualizada com sucesso!")
                         
                         if github_result['success']:
-                            st.success(f"✅ Sincronizado com GitHub! {github_result.get('message', '')}")
+                            st.success(f"✅ Sincronizado com Banco de Dados! {github_result.get('message', '')}")
                         else:
                             st.warning(f"⚠️ Erro na sincronização: {github_result.get('error', '')}")
                         
@@ -1821,12 +1821,12 @@ with tab2:
                                 st.session_state.id_para_excluir = None
                                 
                                 # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                                with st.spinner("🔄 Sincronizando com GitHub..."):
+                                with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
                                     github_result = sincronizar_github("exclusao")
                                 # ===== FIM SINCRONIZAÇÃO =====
                                 
                                 if github_result['success']:
-                                    st.success(f"✅ Viagem excluída e sincronizada com GitHub! {github_result.get('message', '')}")
+                                    st.success(f"✅ Viagem excluída e sincronizada com Banco de Dados! {github_result.get('message', '')}")
                                 else:
                                     st.warning(f"⚠️ Viagem excluída, mas erro na sincronização: {github_result.get('error', '')}")
                                 
@@ -1861,7 +1861,7 @@ with tab2:
                                 st.session_state.confirmar_limpar_todas = False
                                 
                                 # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                                with st.spinner("🔄 Sincronizando com GitHub..."):
+                                with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
                                     github_result = sincronizar_github("exclusao")
                                 # ===== FIM SINCRONIZAÇÃO =====
                                 
@@ -2520,12 +2520,12 @@ with tab5:
                     st.session_state.feedback_enviado = True
                     
                     # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                    with st.spinner("🔄 Sincronizando com GitHub..."):
+                    with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
                         github_result = sincronizar_github("feedback")
                     # ===== FIM SINCRONIZAÇÃO =====
                     
                     if github_result['success']:
-                        st.success(f"✅ Feedback enviado e sincronizado com GitHub! {github_result.get('message', '')}")
+                        st.success(f"✅ Feedback enviado e sincronizado com Banco de Dados! {github_result.get('message', '')}")
                     else:
                         st.warning(f"⚠️ Feedback enviado, mas erro na sincronização: {github_result.get('error', '')}")
                     
