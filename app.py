@@ -472,7 +472,7 @@ class Database:
         if tem_combustivel_local:
             select_cols += ", orcamento_combustivel_local"
         
-        cursor.execute(f"SELECT {select_cols} FROM viagens ORDER BY id DESC")
+        cursor.execute(f"SELECT {select_cols} FROM viagens ORDER BY id ASC")
         rows = cursor.fetchall()
         conn.close()
         
@@ -1728,6 +1728,7 @@ with tab2:
         if 'ID' in df.columns:
             df = df.drop(columns=['ID'])
             df.index = df.index + 1
+            df.index.name = 'Nº'
         df['Total Diárias'] = df['Total Diárias'].apply(lambda x: formatar_moeda(x))
         df['Total Combustível'] = df['Total Combustível'].apply(lambda x: formatar_moeda(x))
         df['Total Geral'] = df['Total Geral'].apply(lambda x: formatar_moeda(x))
@@ -1740,15 +1741,34 @@ with tab2:
         with col1:
             st.markdown("**✏️ Editar Viagem**")
             if not st.session_state.editando_viagem:
-                ids_disponiveis = [v['id'] for v in st.session_state.viagens]
-                id_para_editar = st.selectbox(
-                    "Selecione o ID",
-                    ids_disponiveis,
+                # Criar opções com ID + descrição para ficar claro qual viagem é
+                opcoes_editar = []
+                for v in st.session_state.viagens:
+                    comunidade = v.get('comunidade', '')
+                    if isinstance(comunidade, list):
+                        comunidade = ", ".join(comunidade[:2])
+                        if len(v.get('comunidade', [])) > 2:
+                            comunidade += "..."
+                    
+                    label = f"ID {v['id']} - {comunidade} ({v.get('data_inicio', '')})"
+                    opcoes_editar.append({
+                        'id': v['id'],
+                        'label': label,
+                        'viagem': v
+                    })
+                
+                # Formatar função do selectbox para mostrar o label
+                opcao_selecionada = st.selectbox(
+                    "Selecione a viagem para editar",
+                    options=range(len(opcoes_editar)),
+                    format_func=lambda x: opcoes_editar[x]['label'],
                     key="select_editar",
                     label_visibility="collapsed"
                 )
+                
+                # Botão de edição
                 if st.button("✏️ Editar Viagem", use_container_width=True, key="btn_editar"):
-                    viagem_para_editar = next((v for v in st.session_state.viagens if v['id'] == id_para_editar), None)
+                    viagem_para_editar = opcoes_editar[opcao_selecionada]['viagem']
                     if viagem_para_editar:
                         st.session_state.editando_viagem = viagem_para_editar
                         st.rerun()
@@ -1756,13 +1776,30 @@ with tab2:
         with col2:
             st.markdown("**🗑️ Excluir Viagem**")
             if not st.session_state.editando_viagem:
-                ids_disponiveis = [v['id'] for v in st.session_state.viagens]
-                id_para_excluir = st.selectbox(
-                    "Selecione o ID",
-                    ids_disponiveis,
+                # Criar opções com ID + descrição
+                opcoes_excluir = []
+                for v in st.session_state.viagens:
+                    comunidade = v.get('comunidade', '')
+                    if isinstance(comunidade, list):
+                        comunidade = ", ".join(comunidade[:2])
+                        if len(v.get('comunidade', [])) > 2:
+                            comunidade += "..."
+                    
+                    label = f"ID {v['id']} - {comunidade} ({v.get('data_inicio', '')})"
+                    opcoes_excluir.append({
+                        'id': v['id'],
+                        'label': label
+                    })
+                
+                opcao_excluir_selecionada = st.selectbox(
+                    "Selecione a viagem para excluir",
+                    options=range(len(opcoes_excluir)),
+                    format_func=lambda x: opcoes_excluir[x]['label'],
                     key="select_excluir",
                     label_visibility="collapsed"
                 )
+                
+                id_para_excluir = opcoes_excluir[opcao_excluir_selecionada]['id']
                 
                 if 'confirmar_exclusao' not in st.session_state:
                     st.session_state.confirmar_exclusao = False
