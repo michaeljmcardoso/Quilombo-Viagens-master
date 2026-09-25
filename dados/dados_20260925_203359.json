@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20260925_203742",
+  "data_exportacao": "20260925_203359",
   "total_viagens": 20,
   "viagens": [
     {
@@ -260,7 +260,7 @@
       "tipo_atividade": "[\"Cadastro de Fam\\u00edlias\", \"Dilig\\u00eancias de Cartoriais\"]",
       "cadastrante": "Jennifer",
       "email_usuario": "jennifer.almeida@incra.gov.br",
-      "data_cadastro": "25/09/2026 20:37",
+      "data_cadastro": "03/09/2026 19:35",
       "orcamento_diarias_valor": 4522.5,
       "orcamento_combustivel": 451.75,
       "orcamento_total_geral": 4974.25,
@@ -270,7 +270,7 @@
       "orcamento_total_litros": 65.0,
       "orcamento_combustivel_rodoviario": 382.25,
       "orcamento_combustivel_local": 69.5,
-      "servidores_envolvidos": "Jennifer, Andrea"
+      "servidores_envolvidos": "Não informado"
     },
     {
       "id": 10,
