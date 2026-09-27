@@ -5,7 +5,7 @@ TIPO_DE_ATIVIDADE = [
     "Reunião Comunitária",
     "Cadastro de Famílias",
     "Entrega de Notificações",
-    "Diligências de Cartoriais",
+    "Diligências Cartoriais",
     "Levantamento Fundiário",
     "Relatório Antropológico",
     "Levantamento de Dados",
