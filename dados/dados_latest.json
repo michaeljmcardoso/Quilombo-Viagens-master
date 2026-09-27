@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20260925_203742",
+  "data_exportacao": "20260927_010240",
   "total_viagens": 20,
   "viagens": [
     {
@@ -366,9 +366,9 @@
       "distancia_local": 60.0,
       "distancia_total": 440.0,
       "tipo_atividade": "[\"Reuni\\u00e3o Comunit\\u00e1ria\", \"Levantamento de Dados\"]",
-      "cadastrante": "Cosme",
+      "cadastrante": "Cosme Moura Jr",
       "email_usuario": "",
-      "data_cadastro": "29/08/2026 00:40",
+      "data_cadastro": "27/09/2026 01:02",
       "orcamento_diarias_valor": 2512.5,
       "orcamento_combustivel": 305.8,
       "orcamento_total_geral": 2818.3,
