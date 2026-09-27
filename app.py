@@ -1733,7 +1733,7 @@ with tab2:
         col1, col2 = st.columns(2)
         
         with col1:
-            #st.markdown("**✏️ Editar Viagem**")
+            st.markdown("**Escolha uma viagem para editar**")
             if not st.session_state.editando_viagem:
                 # Criar opções com ID + descrição para ficar claro qual viagem é
                 opcoes_editar = []
