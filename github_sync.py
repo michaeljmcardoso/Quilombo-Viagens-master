@@ -8,10 +8,14 @@ from git import Repo, Actor
 import sqlite3
 import subprocess
 
+def is_streamlit_cloud():
+    """Indica se o aplicativo está sendo executado no Streamlit Cloud."""
+    return 'STREAMLIT_CLOUD' in os.environ or 'STREAMLIT_SHARING' in os.environ
+
 def get_repo_path():
     """Obtém o caminho do repositório automaticamente"""
     # Se estiver no Streamlit Cloud, usa o diretório atual
-    if 'STREAMLIT_CLOUD' in os.environ or 'STREAMLIT_SHARING' in os.environ:
+    if is_streamlit_cloud():
         return os.getcwd()
     # Caso contrário, usa o caminho do .env
     env_path = os.getenv('GITHUB_REPO_PATH', '')

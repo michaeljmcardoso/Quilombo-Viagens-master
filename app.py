@@ -24,6 +24,7 @@ from github_sync import sincronizar_github, testar_github, GitHubSync
 
 # Carrega variáveis de ambiente
 load_dotenv()
+IS_STREAMLIT_CLOUD = github_sync.is_streamlit_cloud()
 
 # Configuração da página
 st.set_page_config(
@@ -1240,26 +1241,33 @@ with st.sidebar:
         st.markdown("---")
         st.caption(f"💾 Dados salvos no banco SQLite")
     
-    st.markdown("---")
-    if st.button("🔄 Forçar Sincronização", use_container_width=True):
-        with st.spinner("🔄 Sincronizando com GitHub..."):
-            result = sincronizar_github("manual")
-            if result['success']:
-                st.success(f"✅ {result.get('message', 'Sincronizado!')}")
-            else:
-                st.error(f"❌ Erro: {result.get('error', '')}")
+    if not IS_STREAMLIT_CLOUD:
+        st.markdown("---")
+        if st.button("🔄 Forçar Sincronização", use_container_width=True):
+            with st.spinner("🔄 Sincronizando com GitHub..."):
+                result = sincronizar_github("manual")
+                if result['success']:
+                    st.success(f"✅ {result.get('message', 'Sincronizado!')}")
+                else:
+                    st.error(f"❌ Erro: {result.get('error', '')}")
 
 # Abas
-tab1, tab2, tab_dia, tab_mes, tab3, tab4, tab5, tab6 = st.tabs([
+nomes_abas = [
     "📝 Nova Viagem", 
     "📋 Lista de Viagens",
     "📅 Viagens do Dia",
     "📆 Viagens do Mês",
     "📊 Análise e Relatórios", 
     "📄 Meus Extratos", 
-    "📝 Feedback",
-    "🔄 Sincronização"
-])
+    "📝 Feedback"
+]
+if not IS_STREAMLIT_CLOUD:
+    nomes_abas.append("🔄 Sincronização")
+
+abas = st.tabs(nomes_abas)
+tab1, tab2, tab_dia, tab_mes, tab3, tab4, tab5 = abas[:7]
+if not IS_STREAMLIT_CLOUD:
+    tab6 = abas[7]
 
 # ==================== TAB 1: CADASTRO ====================
 
@@ -2564,7 +2572,7 @@ with tab5:
 
 # ==================== TAB 6: SINCRONIZAÇÃO ====================
 
-with tab6:
+def renderizar_aba_sincronizacao():
     st.markdown("### 🔄 Sincronização com GitHub")
     st.markdown("Gerencie a sincronização dos dados com o repositório GitHub.")
     
@@ -2669,3 +2677,7 @@ with tab6:
         GITHUB_USER_NAME=michaeljmcardoso
         GITHUB_USER_EMAIL=michaelmiranda38@yahoo.com.br```
     """)
+
+if not IS_STREAMLIT_CLOUD:
+    with tab6:
+        renderizar_aba_sincronizacao()
