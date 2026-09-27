@@ -365,7 +365,7 @@ class Database:
         viagem_id = cursor.lastrowid
         conn.commit()
         conn.close()
-        self.carregar_viagens.clear()
+        carregar_viagens_cache.clear()
         
         return viagem_id
     
@@ -436,95 +436,12 @@ class Database:
         
         conn.commit()
         conn.close()
-        self.carregar_viagens.clear()
+        carregar_viagens_cache.clear()
     
-    @st.cache_data(ttl=5)
     def carregar_viagens(self):
         """Carrega todas as viagens do banco de dados"""
-        conn = self.get_connection()
-        cursor = conn.cursor()
-        
-        # Verificar quais colunas existem na tabela
-        cursor.execute("PRAGMA table_info(viagens)")
-        colunas = [col[1] for col in cursor.fetchall()]
-        
-        tem_servidores_envolvidos = 'servidores_envolvidos' in colunas
-        tem_combustivel_local = 'orcamento_combustivel_local' in colunas
-        
-        # Construir SELECT dinamicamente
-        select_cols = """
-            id, comunidade, municipio, data_inicio, data_fim,
-            quantidade_servidores,
-        """
-        
-        if tem_servidores_envolvidos:
-            select_cols += " servidores_envolvidos,"
-        else:
-            select_cols += " '' AS servidores_envolvidos,"
-        
-        select_cols += """
-            diarias_por_servidor, dias_totais,
-            distancia_rodoviaria, distancia_local, distancia_total,
-            tipo_atividade, cadastrante, email_usuario, data_cadastro,
-            orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
-            orcamento_diarias_servidor, orcamento_litros_rodoviario,
-            orcamento_litros_local, orcamento_total_litros,
-            orcamento_combustivel_rodoviario
-        """
-        
-        if tem_combustivel_local:
-            select_cols += ", orcamento_combustivel_local"
-        
-        cursor.execute(f"SELECT {select_cols} FROM viagens ORDER BY id ASC")
-        rows = cursor.fetchall()
-        conn.close()
-        
-        viagens = []
-        for row in rows:
-            comunidade = json.loads(row[1])
-            municipio = json.loads(row[2])
-            tipo_atividade = json.loads(row[12])
-            
-            orcamento = {
-                'total_diarias_valor': row[16],
-                'total_combustivel': row[17],
-                'total_geral': row[18],
-                'total_diarias_servidor': row[19],
-                'litros_rodoviario': row[20],
-                'litros_local': row[21],
-                'total_litros': row[22],
-                'total_combustivel_rodoviario': row[23],
-                'total_combustivel_local': row[24] if len(row) > 24 else 0.0,
-                'dias_totais': row[8],
-                'diarias_por_servidor': row[7],
-                'distancia_rodoviaria': row[9],
-                'distancia_local': row[10],
-                'distancia_total': row[11]
-            }
-            
-            viagem = {
-                'id': row[0],
-                'comunidade': comunidade,
-                'municipio': municipio,
-                'data_inicio': row[3],
-                'data_fim': row[4],
-                'quantidade_servidores': row[5],
-                'servidores_envolvidos': row[6] if row[6] else 'Não informado',
-                'diarias_por_servidor': row[7],
-                'dias_totais': row[8],
-                'distancia_rodoviaria': row[9],
-                'distancia_local': row[10],
-                'distancia_total': row[11],
-                'tipo_atividade': tipo_atividade,
-                'cadastrante': row[13],
-                'email_usuario': row[14],
-                'data_cadastro': row[15],
-                'orcamento': orcamento
-            }
-            viagens.append(viagem)
-        
-        return viagens
-    
+        return carregar_viagens_cache(self.db_file)
+
     def deletar_todas_viagens(self):
         """Deleta todas as viagens do banco de dados"""
         conn = self.get_connection()
@@ -532,7 +449,7 @@ class Database:
         cursor.execute('DELETE FROM viagens')
         conn.commit()
         conn.close()
-        self.carregar_viagens.clear()
+        carregar_viagens_cache.clear()
     
     def deletar_viagem(self, viagem_id):
         """Deleta uma viagem específica do banco de dados"""
@@ -541,7 +458,89 @@ class Database:
         cursor.execute('DELETE FROM viagens WHERE id = ?', (viagem_id,))
         conn.commit()
         conn.close()
-        self.carregar_viagens.clear()
+        carregar_viagens_cache.clear()
+
+@st.cache_data(ttl=5)
+def carregar_viagens_cache(db_file):
+    """Carrega viagens em cache usando o caminho do banco como chave."""
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+
+    cursor.execute("PRAGMA table_info(viagens)")
+    colunas = [col[1] for col in cursor.fetchall()]
+    tem_servidores_envolvidos = 'servidores_envolvidos' in colunas
+    tem_combustivel_local = 'orcamento_combustivel_local' in colunas
+
+    select_cols = """
+        id, comunidade, municipio, data_inicio, data_fim,
+        quantidade_servidores,
+    """
+    if tem_servidores_envolvidos:
+        select_cols += " servidores_envolvidos,"
+    else:
+        select_cols += " '' AS servidores_envolvidos,"
+
+    select_cols += """
+        diarias_por_servidor, dias_totais,
+        distancia_rodoviaria, distancia_local, distancia_total,
+        tipo_atividade, cadastrante, email_usuario, data_cadastro,
+        orcamento_diarias_valor, orcamento_combustivel, orcamento_total_geral,
+        orcamento_diarias_servidor, orcamento_litros_rodoviario,
+        orcamento_litros_local, orcamento_total_litros,
+        orcamento_combustivel_rodoviario
+    """
+    if tem_combustivel_local:
+        select_cols += ", orcamento_combustivel_local"
+
+    cursor.execute(f"SELECT {select_cols} FROM viagens ORDER BY id ASC")
+    rows = cursor.fetchall()
+    conn.close()
+
+    viagens = []
+    for row in rows:
+        comunidade = json.loads(row[1])
+        municipio = json.loads(row[2])
+        tipo_atividade = json.loads(row[12])
+
+        orcamento = {
+            'total_diarias_valor': row[16],
+            'total_combustivel': row[17],
+            'total_geral': row[18],
+            'total_diarias_servidor': row[19],
+            'litros_rodoviario': row[20],
+            'litros_local': row[21],
+            'total_litros': row[22],
+            'total_combustivel_rodoviario': row[23],
+            'total_combustivel_local': row[24] if len(row) > 24 else 0.0,
+            'dias_totais': row[8],
+            'diarias_por_servidor': row[7],
+            'distancia_rodoviaria': row[9],
+            'distancia_local': row[10],
+            'distancia_total': row[11]
+        }
+
+        viagem = {
+            'id': row[0],
+            'comunidade': comunidade,
+            'municipio': municipio,
+            'data_inicio': row[3],
+            'data_fim': row[4],
+            'quantidade_servidores': row[5],
+            'servidores_envolvidos': row[6] if row[6] else 'Não informado',
+            'diarias_por_servidor': row[7],
+            'dias_totais': row[8],
+            'distancia_rodoviaria': row[9],
+            'distancia_local': row[10],
+            'distancia_total': row[11],
+            'tipo_atividade': tipo_atividade,
+            'cadastrante': row[13],
+            'email_usuario': row[14],
+            'data_cadastro': row[15],
+            'orcamento': orcamento
+        }
+        viagens.append(viagem)
+
+    return viagens
 
 # Inicializar banco de dados
 @st.cache_resource
