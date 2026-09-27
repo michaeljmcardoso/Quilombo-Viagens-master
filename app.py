@@ -24,7 +24,7 @@ from github_sync import sincronizar_github, testar_github, GitHubSync
 
 # Carrega variáveis de ambiente
 load_dotenv()
-IS_STREAMLIT_CLOUD = github_sync.is_streamlit_cloud()
+IS_STREAMLIT_CLOUD = github_sync.is_streamlit_cloud(st.context.url)
 
 # Configuração da página
 st.set_page_config(

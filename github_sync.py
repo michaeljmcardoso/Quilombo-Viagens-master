@@ -3,14 +3,30 @@ import os
 import csv
 import json
 from datetime import datetime
+from urllib.parse import urlparse
 import git
 from git import Repo, Actor
 import sqlite3
 import subprocess
 
-def is_streamlit_cloud():
+def is_streamlit_cloud(app_url=None):
     """Indica se o aplicativo está sendo executado no Streamlit Cloud."""
-    return 'STREAMLIT_CLOUD' in os.environ or 'STREAMLIT_SHARING' in os.environ
+    cloud_markers = (
+        'STREAMLIT_CLOUD',
+        'STREAMLIT_SHARING',
+        'STREAMLIT_SHARING_MODE',
+        'STREAMLIT_RUNTIME',
+        'STREAMLIT_RUNTIME_ENV',
+        'STREAMLIT_RUNTIME_ENVIRONMENT',
+    )
+    if any(os.getenv(marker) for marker in cloud_markers):
+        return True
+
+    if os.getenv('IS_STREAMLIT_CLOUD', '').strip().lower() in {'1', 'true', 'yes'}:
+        return True
+
+    hostname = urlparse(app_url or '').hostname or ''
+    return hostname == 'streamlit.io' or hostname.endswith(('.streamlit.io', '.streamlit.app'))
 
 def get_repo_path():
     """Obtém o caminho do repositório automaticamente"""
