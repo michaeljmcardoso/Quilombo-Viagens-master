@@ -1730,10 +1730,10 @@ with tab2:
         st.dataframe(df, use_container_width=True, height=400)
         
         st.markdown("### 🔧 Gerenciar Viagens")
-        col1, col2, col3 = st.columns(3)
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("**✏️ Editar Viagem**")
+            #st.markdown("**✏️ Editar Viagem**")
             if not st.session_state.editando_viagem:
                 # Criar opções com ID + descrição para ficar claro qual viagem é
                 opcoes_editar = []
@@ -1767,106 +1767,106 @@ with tab2:
                         st.session_state.editando_viagem = viagem_para_editar
                         st.rerun()
         
-        with col2:
-            st.markdown("**🗑️ Excluir Viagem**")
-            if not st.session_state.editando_viagem:
-                # Criar opções com ID + descrição
-                opcoes_excluir = []
-                for v in st.session_state.viagens:
-                    comunidade = v.get('comunidade', '')
-                    if isinstance(comunidade, list):
-                        comunidade = ", ".join(comunidade[:2])
-                        if len(v.get('comunidade', [])) > 2:
-                            comunidade += "..."
+        # with col2:
+        #     st.markdown("**🗑️ Excluir Viagem**")
+        #     if not st.session_state.editando_viagem:
+        #         # Criar opções com ID + descrição
+        #         opcoes_excluir = []
+        #         for v in st.session_state.viagens:
+        #             comunidade = v.get('comunidade', '')
+        #             if isinstance(comunidade, list):
+        #                 comunidade = ", ".join(comunidade[:2])
+        #                 if len(v.get('comunidade', [])) > 2:
+        #                     comunidade += "..."
                     
-                    label = f"ID {v['id']} - {comunidade} ({v.get('data_inicio', '')})"
-                    opcoes_excluir.append({
-                        'id': v['id'],
-                        'label': label
-                    })
+        #             label = f"ID {v['id']} - {comunidade} ({v.get('data_inicio', '')})"
+        #             opcoes_excluir.append({
+        #                 'id': v['id'],
+        #                 'label': label
+        #             })
                 
-                opcao_excluir_selecionada = st.selectbox(
-                    "Selecione a viagem para excluir",
-                    options=range(len(opcoes_excluir)),
-                    format_func=lambda x: opcoes_excluir[x]['label'],
-                    key="select_excluir",
-                    label_visibility="collapsed"
-                )
+        #         opcao_excluir_selecionada = st.selectbox(
+        #             "Selecione a viagem para excluir",
+        #             options=range(len(opcoes_excluir)),
+        #             format_func=lambda x: opcoes_excluir[x]['label'],
+        #             key="select_excluir",
+        #             label_visibility="collapsed"
+        #         )
                 
-                id_para_excluir = opcoes_excluir[opcao_excluir_selecionada]['id']
+        #         id_para_excluir = opcoes_excluir[opcao_excluir_selecionada]['id']
                 
-                if 'confirmar_exclusao' not in st.session_state:
-                    st.session_state.confirmar_exclusao = False
+        #         if 'confirmar_exclusao' not in st.session_state:
+        #             st.session_state.confirmar_exclusao = False
                 
-                if st.button("🗑️ Excluir Viagem", type="secondary", use_container_width=True, key="btn_excluir"):
-                    st.session_state.confirmar_exclusao = True
-                    st.session_state.id_para_excluir = id_para_excluir
-                    st.rerun()
+        #         if st.button("🗑️ Excluir Viagem", type="secondary", use_container_width=True, key="btn_excluir"):
+        #             st.session_state.confirmar_exclusao = True
+        #             st.session_state.id_para_excluir = id_para_excluir
+        #             st.rerun()
                 
-                if st.session_state.confirmar_exclusao and st.session_state.id_para_excluir == id_para_excluir:
-                    st.warning(f"⚠️ Tem certeza que deseja excluir a viagem ID {id_para_excluir}?")
-                    col_confirm, col_cancel = st.columns(2)
-                    with col_confirm:
-                        if st.button("✅ Sim, excluir", use_container_width=True, key="confirm_excluir"):
-                            try:
-                                db.deletar_viagem(id_para_excluir)
-                                st.session_state.viagens = db.carregar_viagens()
-                                st.session_state.confirmar_exclusao = False
-                                st.session_state.id_para_excluir = None
+        #         if st.session_state.confirmar_exclusao and st.session_state.id_para_excluir == id_para_excluir:
+        #             st.warning(f"⚠️ Tem certeza que deseja excluir a viagem ID {id_para_excluir}?")
+        #             col_confirm, col_cancel = st.columns(2)
+        #             with col_confirm:
+        #                 if st.button("✅ Sim, excluir", use_container_width=True, key="confirm_excluir"):
+        #                     try:
+        #                         db.deletar_viagem(id_para_excluir)
+        #                         st.session_state.viagens = db.carregar_viagens()
+        #                         st.session_state.confirmar_exclusao = False
+        #                         st.session_state.id_para_excluir = None
                                 
-                                # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                                with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
-                                    github_result = sincronizar_github("exclusao")
-                                # ===== FIM SINCRONIZAÇÃO =====
+        #                         # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+        #                         with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
+        #                             github_result = sincronizar_github("exclusao")
+        #                         # ===== FIM SINCRONIZAÇÃO =====
                                 
-                                if github_result['success']:
-                                    st.success(f"✅ Viagem excluída e sincronizada com Banco de Dados! {github_result.get('message', '')}")
-                                else:
-                                    st.warning(f"⚠️ Viagem excluída, mas erro na sincronização: {github_result.get('error', '')}")
+        #                         if github_result['success']:
+        #                             st.success(f"✅ Viagem excluída e sincronizada com Banco de Dados! {github_result.get('message', '')}")
+        #                         else:
+        #                             st.warning(f"⚠️ Viagem excluída, mas erro na sincronização: {github_result.get('error', '')}")
                                 
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao excluir: {str(e)}")
-                    with col_cancel:
-                        if st.button("❌ Cancelar", use_container_width=True, key="cancel_excluir"):
-                            st.session_state.confirmar_exclusao = False
-                            st.session_state.id_para_excluir = None
-                            st.rerun()
+        #                         st.rerun()
+        #                     except Exception as e:
+        #                         st.error(f"❌ Erro ao excluir: {str(e)}")
+        #             with col_cancel:
+        #                 if st.button("❌ Cancelar", use_container_width=True, key="cancel_excluir"):
+        #                     st.session_state.confirmar_exclusao = False
+        #                     st.session_state.id_para_excluir = None
+        #                     st.rerun()
         
-        with col3:
-            st.markdown("**🗑️ Limpar Todas**")
-            if not st.session_state.editando_viagem:
-                if 'confirmar_limpar_todas' not in st.session_state:
-                    st.session_state.confirmar_limpar_todas = False
+        # with col3:
+            #st.markdown("**🗑️ Limpar Todas**")
+            # if not st.session_state.editando_viagem:
+            #     if 'confirmar_limpar_todas' not in st.session_state:
+                #     st.session_state.confirmar_limpar_todas = False
                 
-                if st.button("🗑️ Limpar Todas", type="secondary", use_container_width=True, key="btn_limpar_todas"):
-                    st.session_state.confirmar_limpar_todas = True
-                    st.rerun()
+                # if st.button("🗑️ Limpar Todas", type="secondary", use_container_width=True, key="btn_limpar_todas"):
+                #     st.session_state.confirmar_limpar_todas = True
+                #     st.rerun()
                 
-                if st.session_state.confirmar_limpar_todas:
-                    st.warning("⚠️ ATENÇÃO: Isso irá excluir TODAS as viagens cadastradas!")
-                    col_confirm, col_cancel = st.columns(2)
-                    with col_confirm:
-                        if st.button("✅ Sim, excluir todas", use_container_width=True, key="confirm_limpar_todas"):
-                            try:
-                                db.deletar_todas_viagens()
-                                st.session_state.viagens = []
-                                st.session_state.viagem_cadastrada = None
-                                st.session_state.confirmar_limpar_todas = False
+                # if st.session_state.confirmar_limpar_todas:
+                #     st.warning("⚠️ ATENÇÃO: Isso irá excluir TODAS as viagens cadastradas!")
+                #     col_confirm, col_cancel = st.columns(2)
+                #     with col_confirm:
+                #         if st.button("✅ Sim, excluir todas", use_container_width=True, key="confirm_limpar_todas"):
+                #             try:
+                #                 db.deletar_todas_viagens()
+                #                 st.session_state.viagens = []
+                #                 st.session_state.viagem_cadastrada = None
+                #                 st.session_state.confirmar_limpar_todas = False
                                 
-                                # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
-                                with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
-                                    github_result = sincronizar_github("exclusao")
-                                # ===== FIM SINCRONIZAÇÃO =====
+                #                 # ===== SINCRONIZAÇÃO AUTOMÁTICA =====
+                #                 with st.spinner("🔄 Sincronizando com Banco de Dados. Aguarde..."):
+                #                     github_result = sincronizar_github("exclusao")
+                #                 # ===== FIM SINCRONIZAÇÃO =====
                                 
-                                st.success("✅ Todas as viagens foram excluídas com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"❌ Erro ao excluir: {str(e)}")
-                    with col_cancel:
-                        if st.button("❌ Cancelar", use_container_width=True, key="cancel_limpar_todas"):
-                            st.session_state.confirmar_limpar_todas = False
-                            st.rerun()
+                #                 st.success("✅ Todas as viagens foram excluídas com sucesso!")
+                #                 st.rerun()
+                #             except Exception as e:
+                #                 st.error(f"❌ Erro ao excluir: {str(e)}")
+                #     with col_cancel:
+                #         if st.button("❌ Cancelar", use_container_width=True, key="cancel_limpar_todas"):
+                            # st.session_state.confirmar_limpar_todas = False
+                            # st.rerun()
         st.markdown("---")
         col1, col2 = st.columns(2)
         with col2:
