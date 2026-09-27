@@ -1,13 +1,12 @@
 # github_sync.py
 import os
+import csv
 import json
-import pandas as pd
 from datetime import datetime
 import git
 from git import Repo, Actor
 import sqlite3
 import subprocess
-import shutil
 
 def get_repo_path():
     """Obtém o caminho do repositório automaticamente"""
@@ -68,110 +67,70 @@ class GitHubSync:
                 print(f"❌ Erro ao carregar repositório: {str(e)}")
                 self.repo = None
     
-    def fazer_backup_banco(self):
-        """Faz backup do banco de dados antes do commit"""
-        db_path = os.path.join(self.repo_path, 'viagens.db')
-        if os.path.exists(db_path):
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_path = os.path.join(self.repo_path, f'backup_viagens_{timestamp}.db')
-            shutil.copy2(db_path, backup_path)
-            print(f"✅ Backup criado: {backup_path}")
-            
-            # Adicionar backup ao Git
-            if self.repo:
-                self.repo.index.add([f'backup_viagens_{timestamp}.db'])
-            return backup_path
-        return None
-    
     def exportar_dados(self, db_file="viagens.db"):
-        """Exporta os dados do banco para JSON, CSV e SQL dump"""
+        """Atualiza as exportações mais recentes sem criar arquivos históricos."""
         try:
-            # Verificar se o banco existe
-            if not os.path.exists(db_file):
+            db_path = os.path.join(self.repo_path, db_file)
+            if not os.path.exists(db_path):
                 return {
                     'success': False,
-                    'error': f'Banco de dados não encontrado: {db_file}'
+                    'error': f'Banco de dados não encontrado: {db_path}'
                 }
             
-            # Conectar ao banco
-            conn = sqlite3.connect(db_file)
-            
-            # Exportar viagens
-            df_viagens = pd.read_sql_query("SELECT * FROM viagens ORDER BY id DESC", conn)
-            
-            # Exportar feedbacks
-            try:
-                df_feedback = pd.read_sql_query("SELECT * FROM feedback ORDER BY id DESC", conn)
-            except:
-                df_feedback = pd.DataFrame()
-            
-            conn.close()
-            
-            # Criar diretório de dados
+            with sqlite3.connect(db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                viagens = [
+                    dict(row)
+                    for row in conn.execute("SELECT * FROM viagens ORDER BY id DESC")
+                ]
+                tabelas = {
+                    row['name']
+                    for row in conn.execute(
+                        "SELECT name FROM sqlite_master WHERE type = 'table'"
+                    )
+                }
+                feedbacks = []
+                if 'feedback' in tabelas:
+                    feedbacks = [
+                        dict(row)
+                        for row in conn.execute("SELECT * FROM feedback ORDER BY id DESC")
+                    ]
+                colunas_viagens = [
+                    row['name']
+                    for row in conn.execute("PRAGMA table_info(viagens)")
+                ]
+
             data_dir = os.path.join(self.repo_path, 'dados')
             os.makedirs(data_dir, exist_ok=True)
-            
-            # Salvar como CSV
+
+            csv_path = os.path.join(data_dir, 'viagens_latest.csv')
+            with open(csv_path, 'w', newline='', encoding='utf-8-sig') as arquivo_csv:
+                writer = csv.DictWriter(arquivo_csv, fieldnames=colunas_viagens)
+                writer.writeheader()
+                writer.writerows(viagens)
+
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            
-            # Exportar viagens
-            csv_path_viagens = os.path.join(data_dir, f'viagens_{timestamp}.csv')
-            df_viagens.to_csv(csv_path_viagens, index=False, encoding='utf-8-sig')
-            
-            csv_path_viagens_latest = os.path.join(data_dir, 'viagens_latest.csv')
-            df_viagens.to_csv(csv_path_viagens_latest, index=False, encoding='utf-8-sig')
-            
-            # Exportar feedbacks
-            if not df_feedback.empty:
-                csv_path_feedback = os.path.join(data_dir, f'feedback_{timestamp}.csv')
-                df_feedback.to_csv(csv_path_feedback, index=False, encoding='utf-8-sig')
-                
-                csv_path_feedback_latest = os.path.join(data_dir, 'feedback_latest.csv')
-                df_feedback.to_csv(csv_path_feedback_latest, index=False, encoding='utf-8-sig')
-            
-            # Exportar JSON
-            json_path = os.path.join(data_dir, f'dados_{timestamp}.json')
+            json_path = os.path.join(data_dir, 'dados_latest.json')
             dados = {
                 'data_exportacao': timestamp,
-                'total_viagens': len(df_viagens),
-                'viagens': df_viagens.to_dict('records'),
-                'feedbacks': df_feedback.to_dict('records') if not df_feedback.empty else []
+                'total_viagens': len(viagens),
+                'viagens': viagens,
+                'feedbacks': feedbacks
             }
-            
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
-            
-            json_path_latest = os.path.join(data_dir, 'dados_latest.json')
-            with open(json_path_latest, 'w', encoding='utf-8') as f:
-                json.dump(dados, f, ensure_ascii=False, indent=2, default=str)
-            
-            # Criar dump SQL do banco
-            dump_path = os.path.join(self.repo_path, f'dump_viagens_{timestamp}.sql')
-            try:
-                result = subprocess.run(
-                    ['sqlite3', db_file, '.dump'],
-                    capture_output=True,
-                    text=True,
-                    cwd=self.repo_path
-                )
-                if result.returncode == 0:
-                    with open(dump_path, 'w', encoding='utf-8') as f:
-                        f.write(result.stdout)
-                    print(f"✅ Dump SQL criado: {dump_path}")
-                    
-                    # Adicionar dump ao Git
-                    if self.repo:
-                        self.repo.index.add([dump_path])
-            except Exception as e:
-                print(f"⚠️ Erro ao criar dump SQL: {str(e)}")
+            with open(json_path, 'w', encoding='utf-8') as arquivo_json:
+                json.dump(dados, arquivo_json, ensure_ascii=False, indent=2, default=str)
             
             return {
                 'success': True,
                 'timestamp': timestamp,
-                'total_viagens': len(df_viagens),
-                'csv_path': csv_path_viagens,
+                'total_viagens': len(viagens),
+                'csv_path': csv_path,
                 'json_path': json_path,
-                'dump_path': dump_path
+                'files': [
+                    os.path.relpath(db_path, self.repo_path),
+                    os.path.relpath(csv_path, self.repo_path),
+                    os.path.relpath(json_path, self.repo_path)
+                ]
             }
             
         except Exception as e:
@@ -180,7 +139,7 @@ class GitHubSync:
                 'error': str(e)
             }
     
-    def commit_e_push(self, mensagem="Atualização automática do sistema"):
+    def commit_e_push(self, mensagem="Atualização automática do sistema", arquivos=None):
         """Faz commit e push das alterações para o GitHub"""
         if not self.enabled or not self.repo:
             return {
@@ -193,39 +152,55 @@ class GitHubSync:
                 'success': False,
                 'error': 'Token não configurado'
             }
+        if not arquivos:
+            return {
+                'success': False,
+                'error': 'Nenhum arquivo foi informado para sincronização'
+            }
         
         try:
-            # ===== FAZER BACKUP DO BANCO =====
-            self.fazer_backup_banco()
-            # ===== FIM BACKUP =====
-            
-            # ===== GARANTIR QUE O BANCO DE DADOS SEJA ADICIONADO =====
-            db_path = os.path.join(self.repo_path, 'viagens.db')
-            if os.path.exists(db_path):
-                self.repo.index.add(['viagens.db'])
-                print(f"✅ Banco de dados adicionado: {db_path}")
-            # ===== FIM =====
-            
-            # Adicionar todas as outras alterações
-            self.repo.index.add('*')
-            
-            # Verificar se há alterações
-            if not self.repo.index.diff('HEAD'):
-                return {
-                    'success': True,
-                    'message': 'Nenhuma alteração para commitar'
-                }
-            
-            # Fazer commit
-            author = Actor(self.user_name, self.user_email)
-            commit_message = f"{mensagem} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-            self.repo.index.commit(commit_message, author=author)
+            self.repo.index.add(arquivos)
+
+            if self.repo.index.diff('HEAD', paths=arquivos):
+                author = Actor(self.user_name, self.user_email)
+                commit_message = f"{mensagem} - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+                commit_result = subprocess.run(
+                    [
+                        'git', '-c', f'user.name={author.name}',
+                        '-c', f'user.email={author.email}',
+                        'commit', '--only', '-m', commit_message, '--', *arquivos
+                    ],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=30
+                )
+                if commit_result.returncode != 0:
+                    return {
+                        'success': False,
+                        'error': commit_result.stderr.strip() or commit_result.stdout.strip()
+                    }
+                subprocess.run(
+                    ['git', 'reset', '--quiet', 'HEAD', '--', *arquivos],
+                    cwd=self.repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30
+                )
+            else:
+                commit_message = None
+
             commit_hash = self.repo.head.commit.hexsha[:7]
             
             if self.modo_teste:
                 return {
                     'success': True,
-                    'message': f'✅ Commit no modo teste: {commit_message}',
+                    'message': (
+                        f'✅ Commit no modo teste: {commit_message}'
+                        if commit_message
+                        else 'Nenhuma alteração para commitar no modo teste'
+                    ),
                     'commit_hash': commit_hash
                 }
             
@@ -236,13 +211,18 @@ class GitHubSync:
                 ['git', 'push', remote_url, f'HEAD:{self.branch}'],
                 cwd=self.repo_path,
                 capture_output=True,
-                text=True
+                text=True,
+                timeout=30
             )
             
             if result.returncode == 0:
                 return {
                     'success': True,
-                    'message': f'✅ Commit enviado: {commit_message}',
+                    'message': (
+                        f'✅ Commit enviado: {commit_message}'
+                        if commit_message
+                        else '✅ Sincronização concluída; não havia novas alterações'
+                    ),
                     'commit_hash': commit_hash
                 }
             else:
@@ -251,19 +231,24 @@ class GitHubSync:
                     ['git', 'push', 'origin', self.branch],
                     cwd=self.repo_path,
                     capture_output=True,
-                    text=True
+                    text=True,
+                    timeout=30
                 )
                 
                 if result2.returncode == 0:
                     return {
                         'success': True,
-                        'message': f'✅ Commit enviado (via origin): {commit_message}',
+                        'message': (
+                            f'✅ Commit enviado (via origin): {commit_message}'
+                            if commit_message
+                            else '✅ Sincronização concluída via origin; sem novas alterações'
+                        ),
                         'commit_hash': commit_hash
                     }
                 else:
                     return {
                         'success': False,
-                        'error': result2.stderr
+                        'error': result2.stderr.strip() or result.stderr.strip()
                     }
             
         except Exception as e:
@@ -309,7 +294,7 @@ class GitHubSync:
         else:
             mensagem = f"🔄 Sincronização - {acao}"
         
-        return self.commit_e_push(mensagem)
+        return self.commit_e_push(mensagem, export_result['files'])
 
 def sincronizar_github(acao="cadastro", viagem_data=None):
     """Função wrapper para sincronizar com GitHub"""

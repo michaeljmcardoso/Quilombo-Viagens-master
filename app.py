@@ -365,6 +365,7 @@ class Database:
         viagem_id = cursor.lastrowid
         conn.commit()
         conn.close()
+        self.carregar_viagens.clear()
         
         return viagem_id
     
@@ -435,7 +436,9 @@ class Database:
         
         conn.commit()
         conn.close()
+        self.carregar_viagens.clear()
     
+    @st.cache_data(ttl=5)
     def carregar_viagens(self):
         """Carrega todas as viagens do banco de dados"""
         conn = self.get_connection()
@@ -529,6 +532,7 @@ class Database:
         cursor.execute('DELETE FROM viagens')
         conn.commit()
         conn.close()
+        self.carregar_viagens.clear()
     
     def deletar_viagem(self, viagem_id):
         """Deleta uma viagem específica do banco de dados"""
@@ -537,9 +541,14 @@ class Database:
         cursor.execute('DELETE FROM viagens WHERE id = ?', (viagem_id,))
         conn.commit()
         conn.close()
+        self.carregar_viagens.clear()
 
 # Inicializar banco de dados
-db = Database()
+@st.cache_resource
+def get_database():
+    return Database()
+
+db = get_database()
 
 # ==================== FIM BANCO DE DADOS ====================
 
@@ -1202,8 +1211,7 @@ def get_download_link(df, filename):
 
 # ==================== INICIALIZAÇÃO DA SESSÃO ====================
 
-if 'viagens' not in st.session_state:
-    st.session_state.viagens = db.carregar_viagens()
+st.session_state.viagens = db.carregar_viagens()
 
 if 'viagem_cadastrada' not in st.session_state:
     st.session_state.viagem_cadastrada = None
@@ -1507,8 +1515,6 @@ with tab1:
 
 with tab2:
     st.markdown("### 📋 Viagens Cadastradas")
-    
-    st.session_state.viagens = db.carregar_viagens()
     
     if not st.session_state.viagens:
         st.info("ℹ️ Nenhuma viagem cadastrada.")
@@ -1882,9 +1888,6 @@ with tab2:
 # ==================== TAB VIAGENS DO DIA ====================
 with tab_dia:
     st.markdown("### 📅 Viagens do Dia")
-
-    # Força recarregar do banco
-    st.session_state.viagens = db.carregar_viagens()
     
     # Data de referência
     col_data, col_btn = st.columns([3, 1])
@@ -1958,9 +1961,6 @@ with tab_dia:
 
 with tab_mes:
     st.markdown("### 📆 Viagens do Mês")
-    
-    # Força recarregar do banco
-    st.session_state.viagens = db.carregar_viagens()
     
     # Seleção de mês/ano
     col1, col2 = st.columns(2)
@@ -2075,8 +2075,6 @@ with tab_mes:
 with tab3:
     st.markdown("### 📊 Análise e Relatórios")
     
-    st.session_state.viagens = db.carregar_viagens()
-    
     if not st.session_state.viagens:
         st.info("ℹ️ Cadastre algumas viagens para visualizar as análises.")
     else:
@@ -2169,8 +2167,6 @@ with tab3:
 with tab4:
     st.markdown("### 📄 Meus Extratos")
     st.markdown("Consulte aqui os extratos das suas viagens cadastradas.")
-    
-    st.session_state.viagens = db.carregar_viagens()
     
     if not st.session_state.viagens:
         st.info("ℹ️ Nenhuma viagem cadastrada para consultar extratos.")
@@ -2630,7 +2626,10 @@ with tab6:
                         with open(test_file, 'w') as f:
                             f.write(f"Teste automático - {datetime.now()}\n")
                         
-                        result = sync.commit_e_push("🔧 Teste de automação")
+                        result = sync.commit_e_push(
+                            "🔧 Teste de automação",
+                            ['teste_automacao.txt']
+                        )
                         if result['success']:
                             st.success(f"✅ Teste concluído! {result.get('message', '')}")
                         else:
