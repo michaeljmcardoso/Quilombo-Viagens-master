@@ -1274,7 +1274,6 @@ with tab1:
         
         data_inicio = st.date_input(
             "📅 Data de Início (ida)",
-            min_value=datetime.now().date(),
             value=datetime.now().date()
         )
         data_fim = st.date_input(
