@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20260928_174232",
+  "data_exportacao": "20260928_174346",
   "total_viagens": 21,
   "viagens": [
     {
@@ -98,7 +98,7 @@
       "tipo_atividade": "[\"Reuni\\u00e3o Comunit\\u00e1ria\", \"Levantamento Fundi\\u00e1rio\", \"Relat\\u00f3rio Antropol\\u00f3gico\"]",
       "cadastrante": "Cosme Moura Jr",
       "email_usuario": "cosme.moura@incra.gov.br",
-      "data_cadastro": "28/09/2026 17:42",
+      "data_cadastro": "28/09/2026 17:43",
       "orcamento_diarias_valor": 6030.0,
       "orcamento_combustivel": 222.4,
       "orcamento_total_geral": 6252.4,
@@ -108,7 +108,7 @@
       "orcamento_total_litros": 32.0,
       "orcamento_combustivel_rodoviario": 152.9,
       "orcamento_combustivel_local": 69.5,
-      "servidores_envolvidos": "Rosangela Lima, Cosme Mjr, Miachael Cardoso"
+      "servidores_envolvidos": "Rosangela Lima, Cosme Mjr, Michael Cardoso"
     },
     {
       "id": 18,
