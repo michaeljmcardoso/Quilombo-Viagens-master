@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20260928_183946",
+  "data_exportacao": "20261007_021102",
   "total_viagens": 22,
   "viagens": [
     {
@@ -85,7 +85,7 @@
     },
     {
       "id": 20,
-      "comunidade": "[\"Jutay\"]",
+      "comunidade": "[\"Castelo\", \"Jutay\"]",
       "municipio": "[\"Mon\\u00e7\\u00e3o\"]",
       "data_inicio": "23/11/2026",
       "data_fim": "27/11/2026",
@@ -95,10 +95,10 @@
       "distancia_rodoviaria": 484.0,
       "distancia_local": 100.0,
       "distancia_total": 584.0,
-      "tipo_atividade": "[\"Levantamento de Dados\"]",
+      "tipo_atividade": "[\"Levantamento de Dados\", \"Reuni\\u00e3o Comunit\\u00e1ria\"]",
       "cadastrante": "Michael",
       "email_usuario": "rosangela.lima@incra.gov.br",
-      "data_cadastro": "25/09/2026 18:19",
+      "data_cadastro": "07/10/2026 02:10",
       "orcamento_diarias_valor": 4522.5,
       "orcamento_combustivel": 405.88,
       "orcamento_total_geral": 4928.38,
