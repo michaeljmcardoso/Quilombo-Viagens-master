@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20261013_133645",
+  "data_exportacao": "20261013_133816",
   "total_viagens": 22,
   "viagens": [
     {
@@ -287,7 +287,7 @@
       "tipo_atividade": "[\"Reuni\\u00e3o Comunit\\u00e1ria\", \"Visita T\\u00e9cnica\"]",
       "cadastrante": "Michael",
       "email_usuario": "",
-      "data_cadastro": "18/09/2026 14:03",
+      "data_cadastro": "13/10/2026 13:38",
       "orcamento_diarias_valor": 2345.0,
       "orcamento_combustivel": 279.39,
       "orcamento_total_geral": 2624.39,
@@ -297,7 +297,7 @@
       "orcamento_total_litros": 40.2,
       "orcamento_combustivel_rodoviario": 244.64000000000001,
       "orcamento_combustivel_local": 34.75,
-      "servidores_envolvidos": "Não informado"
+      "servidores_envolvidos": "Michael"
     },
     {
       "id": 11,
