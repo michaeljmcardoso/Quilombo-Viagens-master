@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20261007_021102",
+  "data_exportacao": "20261013_133645",
   "total_viagens": 22,
   "viagens": [
     {
@@ -476,7 +476,7 @@
       "tipo_atividade": "[\"Cadastro de Fam\\u00edlias\"]",
       "cadastrante": "Rodrigo",
       "email_usuario": "",
-      "data_cadastro": "02/09/2026 19:34",
+      "data_cadastro": "13/10/2026 13:36",
       "orcamento_diarias_valor": 11390.0,
       "orcamento_combustivel": 411.44000000000005,
       "orcamento_total_geral": 11801.44,
@@ -486,7 +486,7 @@
       "orcamento_total_litros": 59.2,
       "orcamento_combustivel_rodoviario": 328.04,
       "orcamento_combustivel_local": 83.4,
-      "servidores_envolvidos": "Não informado"
+      "servidores_envolvidos": "Rodrigo, Iure, Everaldo"
     },
     {
       "id": 4,
