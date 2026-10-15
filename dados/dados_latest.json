@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20261015_195143",
+  "data_exportacao": "20261015_195744",
   "total_viagens": 37,
   "viagens": [
     {
@@ -69,9 +69,9 @@
       "distancia_local": 100.0,
       "distancia_total": 600.0,
       "tipo_atividade": "[\"Entrega de Notifica\\u00e7\\u00f5es\"]",
-      "cadastrante": "Jennifer Almeida",
-      "email_usuario": "jennifer.almeida@incra.gov.br",
-      "data_cadastro": "15/10/2026 17:30",
+      "cadastrante": "Jennifer",
+      "email_usuario": "",
+      "data_cadastro": "15/10/2026 19:57",
       "orcamento_diarias_valor": 3517.5,
       "orcamento_combustivel": 417.0,
       "orcamento_total_geral": 3934.5,
