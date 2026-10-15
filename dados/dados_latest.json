@@ -1,5 +1,5 @@
 {
-  "data_exportacao": "20261015_182716",
+  "data_exportacao": "20261015_182823",
   "total_viagens": 36,
   "viagens": [
     {
@@ -14,10 +14,10 @@
       "distancia_rodoviaria": 0.0,
       "distancia_local": 0.0,
       "distancia_total": 0.0,
-      "tipo_atividade": "[]",
+      "tipo_atividade": "[\"Relat\\u00f3rio Antropol\\u00f3gico\", \"Entrega de Notifica\\u00e7\\u00f5es\"]",
       "cadastrante": "umberto",
       "email_usuario": "umberto.junior@incra.gov.br",
-      "data_cadastro": "15/10/2026 18:27",
+      "data_cadastro": "15/10/2026 18:28",
       "orcamento_diarias_valor": 4857.5,
       "orcamento_combustivel": 0.0,
       "orcamento_total_geral": 4857.5,
